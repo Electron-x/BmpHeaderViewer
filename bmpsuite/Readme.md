@@ -10,7 +10,7 @@ The author, Jason Summers, also provides a [description of each image](https://e
 
 ## Additional Images
 
-The BMP Suite is a great collection. However, some variants are missing. Therefore, the following files have been added using a modified `bmpsuite.c`:
+The BMP Suite is a great collection. However, some variants are missing. Therefore, the following files have been added using a modified bmpsuite.c:
 
 `x/msvideo1.bmp`
 `x/cinepak.bmp`
@@ -18,7 +18,6 @@ The BMP Suite is a great collection. However, some variants are missing. Therefo
 These are two video compressed bitmaps.
 Windows does not provide a 64-bit version of the Cinepak codec. Therefore, the 32-bit (x86) application is required to display the Cinepak image.
 FFmpeg was used to compress the bitmap bits. However, using the Video Compression Manager API, any application could generate such custom DIB formats.
-
 
 `b/rgb24bf.bmp`
 
