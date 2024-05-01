@@ -2,7 +2,7 @@
 
 ## Windows Bitmap (header) viewer application
 
-BMP Header Viewer is a small Windows application that displays the headers and metadata of Windows Bitmap files of almost all formats.
+BMP Header Viewer is a small Windows application that displays the headers and metadata of Windows Bitmap files of almost all formats.  
 The DIB contained in the BMP file is displayed using GDI or VfW. An alpha channel and limited color management are supported. The application supports the transfer of bitmaps via the clipboard. It is also possible to export the ICC profile of a BMP file.
 
 <p>
@@ -353,7 +353,7 @@ A BMP file can be opened in various ways:
 - Via drag-and-drop
 - Via the clipboard (per context menu of the application window or per <kbd>CTRL</kbd>+<kbd>V</kbd> in the output window)
 
-An open bitmap can be copied to the clipboard via the context menu of the thumbnail.
+An open bitmap can be copied to the clipboard via the context menu of the thumbnail.  
 A memory bitmap can be pasted from the clipboard via the context menu of the application window.
 
 For performance reasons, color management is only activated if the bitmap contains color space data and no transparent pixels. But you can use the context menu of the thumbnail to activate or deactivate color matching for this specific image.
@@ -372,7 +372,7 @@ Only the header and the tag table of an embedded color profile are displayed. Ho
 
 Standard DIBs and DIBs with DIB format extensions are displayed directly using Windows GDI. No format conversion takes place. For custom formats, the DrawDib API from Video for Windows is used. No other codec-based frameworks such as Windows Imaging Component are used.
 
-Color matching is performed on-the-fly using ICM inside DC. As ICM outside DC is not supported, DIBs with transparent pixels are displayed without color matching. DIBs with linked ICC profiles are not supported. In the Color Management dialog box, intent selection and proofing are not supported.
+Color matching is performed on-the-fly using [ICM inside DC](https://learn.microsoft.com/en-us/windows/win32/api/wingdi/nf-wingdi-seticmmode). As ICM outside DC is not supported, DIBs with transparent pixels are displayed without color matching. DIBs with linked ICC profiles are not supported. In the Color Management dialog box, intent selection and proofing are not supported.
 
 The dark mode of Windows 10 1809+ is only rudimentarily supported (limited to the main window).
 
@@ -380,7 +380,7 @@ There is no installer for the application.
 
 ## Building the project
 
-This is a generic C/C++ Win32 desktop project created with Microsoft Visual Studio 2022.
+This is a generic C/C++ Win32 desktop project created with Microsoft Visual Studio 2022.  
 There are no special prerequisites or dependencies.
 
 ## License
