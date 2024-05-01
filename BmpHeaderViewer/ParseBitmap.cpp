@@ -1,0 +1,1075 @@
+////////////////////////////////////////////////////////////////////////////////////////////////
+// ParseBitmap.cpp - Copyright (c) 2024 by W. Rolke.
+//
+// Licensed under the EUPL, Version 1.2 or - as soon they will be approved by
+// the European Commission - subsequent versions of the EUPL (the "Licence");
+// You may not use this work except in compliance with the Licence.
+// You may obtain a copy of the Licence at:
+//
+// https://joinup.ec.europa.eu/software/page/eupl
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the Licence is distributed on an "AS IS" basis,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the Licence for the specific language governing permissions and
+// limitations under the Licence.
+//
+////////////////////////////////////////////////////////////////////////////////////////////////
+
+#include "stdafx.h"
+
+////////////////////////////////////////////////////////////////////////////////////////////////
+// Forward declarations of functions included in this code module
+
+// Outputs an ICC profile signature given in big-endian format
+void PrintProfileSignature(HWND hwndEdit, LPCTSTR lpszName, DWORD dwSignature, BOOL bAddCrLf = TRUE);
+
+// Returns the color name if the color passed is one of the 20 static system palette colors
+BOOL GetColorName(COLORREF rgbColor, LPCTSTR* lpszName);
+
+// Converts a half-precision floating-point number to a single-precision float.
+// Special values like subnormals, infinities, NaN's and -0 are not supported.
+float Half2Float(WORD h);
+
+////////////////////////////////////////////////////////////////////////////////////////////////
+
+BOOL ParseBitmap(HWND hDlg, HANDLE hFile, DWORD dwFileSize)
+{
+	BITMAPFILEHEADER bfh;
+	DWORD dwFileHeaderSize = sizeof(bfh);
+
+	if (hDlg == NULL || hFile == NULL)
+	{
+		SetLastError(ERROR_INVALID_PARAMETER);
+		return FALSE;
+	}
+
+	if (dwFileSize < dwFileHeaderSize)
+	{
+		SetLastError(ERROR_INVALID_DATA);
+		return FALSE;
+	}
+
+	HWND hwndEdit = GetDlgItem(hDlg, IDC_OUTPUT);
+	if (hwndEdit == NULL)
+		return FALSE;
+
+	HWND hwndThumb = GetDlgItem(hDlg, IDC_THUMB);
+	if (hwndThumb == NULL)
+		return FALSE;
+
+	// Jump to the beginning of the file
+	if (!FileSeekBegin(hFile, 0))
+		return FALSE;
+
+	// Read the file header
+	ZeroMemory(&bfh, sizeof(bfh));
+	if (!MyReadFile(hFile, (LPVOID)&bfh, sizeof(bfh)))
+		return FALSE;
+
+	if (bfh.bfType == BFT_BITMAPARRAY)
+	{ // OS/2 Bit-map Array
+		LPBITMAPARRAYFILEHEADER lpbafh = (LPBITMAPARRAYFILEHEADER)&bfh;
+
+		OutputText(hwndEdit, g_szSepThin);
+		OutputTextFmt(hwndEdit, TEXT("Type:\t\t%hc%hc\r\n"), LOBYTE(lpbafh->usType), HIBYTE(lpbafh->usType));
+		OutputTextFmt(hwndEdit, TEXT("Size:\t\t%u bytes\r\n"), lpbafh->cbSize);
+		OutputTextFmt(hwndEdit, TEXT("OffNext:\t%u bytes\r\n"), lpbafh->offNext);
+		OutputTextFmt(hwndEdit, TEXT("CxDisplay:\t%u\r\n"), lpbafh->cxDisplay);
+		OutputTextFmt(hwndEdit, TEXT("CyDisplay:\t%u\r\n"), lpbafh->cyDisplay);
+
+		// Proceed only if the array contains only one bitmap
+		if (lpbafh->offNext != 0)
+		{
+			OutputTextFromID(hwndEdit, IDS_BITMAPARRAY);
+			SetThumbnailText(hwndThumb, IDS_UNSUPPORTED);
+			return FALSE;
+		}
+
+		dwFileHeaderSize += dwFileHeaderSize;
+		if (dwFileSize < dwFileHeaderSize)
+		{
+			SetLastError(ERROR_INVALID_DATA);
+			return FALSE;
+		}
+
+		// Read the file header of the first bitmap
+		ZeroMemory(&bfh, sizeof(bfh));
+		if (!MyReadFile(hFile, (LPVOID)&bfh, sizeof(bfh)))
+			return FALSE;
+
+		if (bfh.bfType != BFT_BMAP)
+		{ // No support for icons and pointers
+			OutputTextFromID(hwndEdit, IDS_ICON_POINTER);
+			SetThumbnailText(hwndThumb, IDS_UNSUPPORTED);
+			return FALSE;
+		}
+	}
+
+	// Output the file header (we have already checked bfType in ParseFile)
+	OutputText(hwndEdit, g_szSepThin);
+	OutputTextFmt(hwndEdit, TEXT("Type:\t\t%hc%hc\r\n"), LOBYTE(bfh.bfType), HIBYTE(bfh.bfType));
+	OutputTextFmt(hwndEdit, TEXT("Size:\t\t%u bytes\r\n"), bfh.bfSize);
+	OutputTextFmt(hwndEdit, TEXT("Reserved1:\t%u\r\n"), bfh.bfReserved1);
+	OutputTextFmt(hwndEdit, TEXT("Reserved2:\t%u\r\n"), bfh.bfReserved2);
+	OutputTextFmt(hwndEdit, TEXT("OffBits:\t%u bytes\r\n"), bfh.bfOffBits);
+
+	DWORD dwDibSize = dwFileSize - dwFileHeaderSize;
+	if (dwDibSize < sizeof(BITMAPCOREHEADER))
+	{
+		SetLastError(ERROR_INVALID_DATA);
+		return FALSE;
+	}
+
+	HANDLE hDib = GlobalAlloc(GHND, dwDibSize);
+	if (hDib == NULL)
+		return FALSE;
+
+	LPSTR lpbi = (LPSTR)GlobalLock(hDib);
+	if (lpbi == NULL)
+	{
+		DWORD dwError = GetLastError();
+		GlobalFree(hDib);
+		SetLastError(dwError);
+		return FALSE;
+	}
+
+	// ParseDIBitmap (see below) can be used to examine a DIB object from
+	// the clipboard. To use this function, we read in the entire DIB. If
+	// necessary, we can obtain a packed DIB by modifying the color table.
+	if (!MyReadFile(hFile, lpbi, dwDibSize))
+	{
+		DWORD dwError = GetLastError();
+		GlobalUnlock(hDib);
+		GlobalFree(hDib);
+		SetLastError(dwError);
+		return FALSE;
+	}
+
+	GlobalUnlock(hDib);
+
+	// Calculate the offset from the start of the DIB to the bitmap bits
+	DWORD dwOffBits = 0;
+	if (bfh.bfOffBits > dwFileHeaderSize)
+		dwOffBits = bfh.bfOffBits - dwFileHeaderSize;
+
+	BOOL bSuccess = ParseDIBitmap(hDlg, hDib, dwOffBits);
+
+	if (!bSuccess)
+		GlobalFree(hDib);
+
+	return bSuccess;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////
+
+BOOL ParseDIBitmap(HWND hDlg, HANDLE hDib, DWORD dwOffBits)
+{
+	if (hDlg == NULL || hDib == NULL)
+	{
+		SetLastError(ERROR_INVALID_PARAMETER);
+		return FALSE;
+	}
+
+	HWND hwndEdit = GetDlgItem(hDlg, IDC_OUTPUT);
+	if (hwndEdit == NULL)
+		return FALSE;
+
+	HWND hwndThumb = GetDlgItem(hDlg, IDC_THUMB);
+	if (hwndThumb == NULL)
+		return FALSE;
+
+	DWORD dwDibSize = (DWORD)GlobalSize(hDib);
+	if (dwDibSize == 0)
+		return FALSE;
+
+	LPSTR lpbi = (LPSTR)GlobalLock(hDib);
+	if (lpbi == NULL)
+		return FALSE;
+
+	DWORD dwDibHeaderSize = *(LPDWORD)lpbi;
+	LPBITMAPV5HEADER lpbih = (LPBITMAPV5HEADER)lpbi;
+
+	OutputText(hwndEdit, g_szSepThin);
+	OutputTextFmt(hwndEdit, TEXT("Size:\t\t%u bytes\r\n"), dwDibHeaderSize);
+
+	if (dwDibHeaderSize > dwDibSize)
+	{
+		GlobalUnlock(hDib);
+		SetLastError(ERROR_INVALID_DATA);
+		return FALSE;
+	}
+
+	// Verify that the size of the header matches a supported header size
+	if (dwDibHeaderSize != sizeof(BITMAPCOREHEADER) &&
+		dwDibHeaderSize != sizeof(BITMAPINFOHEADER) &&
+		dwDibHeaderSize != sizeof(BITMAPV2INFOHEADER) &&
+		dwDibHeaderSize != sizeof(BITMAPV3INFOHEADER) &&
+		dwDibHeaderSize != sizeof(BITMAPINFOHEADER2) &&
+		dwDibHeaderSize != sizeof(BITMAPV4HEADER) &&
+		dwDibHeaderSize != sizeof(BITMAPV5HEADER))
+	{
+		// Can be a EXBMINFOHEADER DIB with biSize > 40
+		// or a BITMAPINFOHEADER2 DIB with 15 < cbFix < 64
+		GlobalUnlock(hDib);
+
+		if (dwDibHeaderSize < 16)
+		{
+			SetLastError(ERROR_INVALID_DATA);
+			return FALSE;
+		}
+
+		OutputTextFromID(hwndEdit, IDS_HEADERSIZE);
+		SetThumbnailText(hwndThumb, IDS_UNSUPPORTED);
+
+		return FALSE;
+	}
+
+	// Since we don't perform format conversions here, all formats that the
+	// display driver cannot directly display are marked as not displayable
+	BOOL bIsDibDisplayable = TRUE;
+
+	if (dwDibHeaderSize == sizeof(BITMAPCOREHEADER))
+	{ // OS/2 Version 1.1 Bitmap (DIBv2)
+		LPBITMAPCOREHEADER lpbch = (LPBITMAPCOREHEADER)lpbi;
+
+		OutputTextFmt(hwndEdit, TEXT("Width:\t\t%u pixels\r\n"), lpbch->bcWidth);
+		OutputTextFmt(hwndEdit, TEXT("Height:\t\t%u pixels\r\n"), lpbch->bcHeight);
+		OutputTextFmt(hwndEdit, TEXT("Planes:\t\t%u\r\n"), lpbch->bcPlanes);
+		OutputTextFmt(hwndEdit, TEXT("BitCount:\t%u bpp\r\n"), lpbch->bcBitCount);
+		
+		// Perform some sanity checks
+		UINT64 ullBitsSize = WIDTHBYTES((UINT64)lpbch->bcWidth * lpbch->bcPlanes * lpbch->bcBitCount) * lpbch->bcHeight;
+		if (ullBitsSize == 0 || ullBitsSize > 0x80000000 || lpbch->bcBitCount > 32)
+			bIsDibDisplayable = FALSE;
+	}
+
+	if (dwDibHeaderSize >= sizeof(BITMAPINFOHEADER))
+	{ // Windows Version 3.0 Bitmap (DIBv3)
+		OutputTextFmt(hwndEdit, TEXT("Width:\t\t%d pixels\r\n"), lpbih->bV5Width);
+		OutputTextFmt(hwndEdit, TEXT("Height:\t\t%d pixels\r\n"), lpbih->bV5Height);
+		OutputTextFmt(hwndEdit, TEXT("Planes:\t\t%u\r\n"), lpbih->bV5Planes);
+		OutputTextFmt(hwndEdit, TEXT("BitCount:\t%u bpp\r\n"), lpbih->bV5BitCount);
+
+		// Use the QUERYDIBSUPPORT escape function to determine whether the display
+		// driver can draw this DIB. The Escape doesn't support core DIBs.
+		bIsDibDisplayable = IsDibSupported(lpbi);
+		// Perform some additional sanity checks
+		INT64 llBitsSize = WIDTHBYTES((INT64)lpbih->bV5Width * lpbih->bV5Planes * lpbih->bV5BitCount) * abs(lpbih->bV5Height);
+		if (llBitsSize <= 0 || llBitsSize > 0x80000000L)
+			bIsDibDisplayable = FALSE;
+
+		//lpbih->bV5Compression &= ~BI_SRCPREROTATE;
+		DWORD dwCompression = lpbih->bV5Compression;
+		OutputText(hwndEdit, TEXT("Compression:\t"));
+		if (isprint(dwCompression & 0xff) &&
+			isprint((dwCompression >> 8) & 0xff) &&
+			isprint((dwCompression >> 16) & 0xff) &&
+			isprint((dwCompression >> 24) & 0xff))
+		{ // biCompression contains a FourCC code
+			// Not supported by GDI, but may be rendered by VfW DrawDibDraw
+			bIsDibDisplayable = TRUE;
+			OutputTextFmt(hwndEdit, TEXT("%hc%hc%hc%hc"),
+				(char)(dwCompression & 0xff),
+				(char)((dwCompression >> 8) & 0xff),
+				(char)((dwCompression >> 16) & 0xff),
+				(char)((dwCompression >> 24) & 0xff));
+		}
+		else if (dwDibHeaderSize == sizeof(BITMAPINFOHEADER2))
+		{ // OS/2 2.0 bitmap
+			switch (dwCompression)
+			{
+				case BCA_UNCOMP:
+					OutputText(hwndEdit, TEXT("UNCOMP"));
+					break;
+				case BCA_RLE8:
+					OutputText(hwndEdit, TEXT("RLE8"));
+					break;
+				case BCA_RLE4:
+					OutputText(hwndEdit, TEXT("RLE4"));
+					break;
+				case BCA_HUFFMAN1D:
+					OutputText(hwndEdit, TEXT("HUFFMAN1D"));
+					break;
+				case BCA_RLE24:
+					OutputText(hwndEdit, TEXT("RLE24"));
+					break;
+				default:
+					OutputTextFmt(hwndEdit, TEXT("%u"), dwCompression);
+			}
+		}
+		else
+		{
+			switch (dwCompression)
+			{
+				case BI_RGB:
+					OutputText(hwndEdit, TEXT("RGB"));
+					break;
+				case BI_RLE8:
+					OutputText(hwndEdit, TEXT("RLE8"));
+					break;
+				case BI_RLE4:
+					OutputText(hwndEdit, TEXT("RLE4"));
+					break;
+				case BI_BITFIELDS:
+					OutputText(hwndEdit, TEXT("BITFIELDS"));
+					break;
+				case BI_JPEG:
+					OutputText(hwndEdit, TEXT("JPEG"));
+					break;
+				case BI_PNG:
+					OutputText(hwndEdit, TEXT("PNG"));
+					break;
+				case BI_ALPHABITFIELDS:
+					OutputText(hwndEdit, TEXT("ALPHABITFIELDS"));
+					break;
+				case BI_FOURCC:
+					OutputText(hwndEdit, TEXT("FOURCC"));
+					break;
+				case BI_CMYK:
+					OutputText(hwndEdit, TEXT("CMYK"));
+					break;
+				case BI_CMYKRLE8:
+					OutputText(hwndEdit, TEXT("CMYKRLE8"));
+					break;
+				case BI_CMYKRLE4:
+					OutputText(hwndEdit, TEXT("CMYKRLE4"));
+					break;
+				default:
+					OutputTextFmt(hwndEdit, TEXT("%u"), dwCompression);
+			}
+		}
+		OutputText(hwndEdit, TEXT("\r\n"));
+
+		OutputTextFmt(hwndEdit, TEXT("SizeImage:\t%u bytes\r\n"), lpbih->bV5SizeImage);
+
+		OutputTextFmt(hwndEdit, TEXT("XPelsPerMeter:\t%d"), lpbih->bV5XPelsPerMeter);
+		if (lpbih->bV5XPelsPerMeter >= 20)
+			OutputTextFmt(hwndEdit, TEXT(" (%d dpi)"), MulDiv(lpbih->bV5XPelsPerMeter, 127, 5000));
+		OutputText(hwndEdit, TEXT("\r\n"));
+			
+		OutputTextFmt(hwndEdit, TEXT("YPelsPerMeter:\t%d"), lpbih->bV5YPelsPerMeter);
+		if (lpbih->bV5YPelsPerMeter >= 20)
+			OutputTextFmt(hwndEdit, TEXT(" (%d dpi)"), MulDiv(lpbih->bV5YPelsPerMeter, 127, 5000));
+		OutputText(hwndEdit, TEXT("\r\n"));
+			
+		OutputTextFmt(hwndEdit, TEXT("ClrUsed:\t%u\r\n"), lpbih->bV5ClrUsed);
+		OutputTextFmt(hwndEdit, TEXT("ClrImportant:\t%u\r\n"), lpbih->bV5ClrImportant);
+	}
+
+	// The size of the OS/2 2.0 header can be reduced from its full size of
+	// 64 bytes down to 16 bytes. Omitted members are assumed to have a value
+	// of zero. However, we only support bitmaps with full header here.
+	if (dwDibHeaderSize == sizeof(BITMAPINFOHEADER2))
+	{ // OS/2 Version 2.0 Bitmap
+		LPBITMAPINFOHEADER2 lpbih2 = (LPBITMAPINFOHEADER2)lpbi;
+
+		// Extensions to BITMAPINFOHEADER
+		OutputText(hwndEdit, TEXT("Units:\t\t"));
+		if (lpbih2->usUnits == BRU_METRIC)
+			OutputText(hwndEdit, TEXT("METRIC"));
+		else
+			OutputTextFmt(hwndEdit, TEXT("%u"), lpbih2->usUnits);
+		OutputText(hwndEdit, TEXT("\r\n"));
+
+		OutputTextFmt(hwndEdit, TEXT("Reserved:\t%u\r\n"), lpbih2->usReserved);
+
+		OutputText(hwndEdit, TEXT("Recording:\t"));
+		if (lpbih2->usRecording == BRA_BOTTOMUP)
+			OutputText(hwndEdit, TEXT("BOTTOMUP"));
+		else
+			OutputTextFmt(hwndEdit, TEXT("%u"), lpbih2->usRecording);
+		OutputText(hwndEdit, TEXT("\r\n"));
+
+		USHORT usRendering = lpbih2->usRendering;
+		OutputText(hwndEdit, TEXT("Rendering:\t"));
+		switch (usRendering)
+		{
+			case BRH_NOTHALFTONED:
+				OutputText(hwndEdit, TEXT("NOTHALFTONED"));
+				break;
+			case BRH_ERRORDIFFUSION:
+				OutputText(hwndEdit, TEXT("ERRORDIFFUSION"));
+				break;
+			case BRH_PANDA:
+				OutputText(hwndEdit, TEXT("PANDA"));
+				break;
+			case BRH_SUPERCIRCLE:
+				OutputText(hwndEdit, TEXT("SUPERCIRCLE"));
+				break;
+			default:
+				OutputTextFmt(hwndEdit, TEXT("%u"), usRendering);
+		}
+		OutputText(hwndEdit, TEXT("\r\n"));
+
+		OutputTextFmt(hwndEdit, TEXT("Size1:\t\t%u"), lpbih2->cSize1);
+		if (usRendering == BRH_ERRORDIFFUSION && lpbih2->cSize1 <= 100)
+			OutputText(hwndEdit, TEXT("%"));
+		else if (usRendering == BRH_PANDA || usRendering == BRH_SUPERCIRCLE)
+			OutputText(hwndEdit, TEXT(" pels"));
+		OutputText(hwndEdit, TEXT("\r\n"));
+
+		OutputTextFmt(hwndEdit, TEXT("Size2:\t\t%u"), lpbih2->cSize2);
+		if (usRendering == BRH_PANDA || usRendering == BRH_SUPERCIRCLE)
+			OutputText(hwndEdit, TEXT(" pels"));
+		OutputText(hwndEdit, TEXT("\r\n"));
+
+		OutputText(hwndEdit, TEXT("ColorEncoding:\t"));
+		if (lpbih2->ulColorEncoding == BCE_RGB)
+			OutputText(hwndEdit, TEXT("RGB"));
+		else if (lpbih2->ulColorEncoding == BCE_PALETTE)
+			OutputText(hwndEdit, TEXT("PALETTE"));
+		else
+			OutputTextFmt(hwndEdit, TEXT("%u"), lpbih2->ulColorEncoding);
+		OutputText(hwndEdit, TEXT("\r\n"));
+
+		OutputTextFmt(hwndEdit, TEXT("Identifier:\t%u\r\n"), lpbih2->ulIdentifier);
+	}
+
+	if (dwDibHeaderSize == sizeof(BITMAPINFOHEADER))
+	{ // Windows Version 3.0 Bitmap with Windows NT extension
+		if (lpbih->bV5Compression == BI_BITFIELDS || lpbih->bV5Compression == BI_ALPHABITFIELDS)
+		{
+			if ((dwDibHeaderSize + ColorMasksSize(lpbi)) > dwDibSize)
+			{
+				GlobalUnlock(hDib);
+				SetLastError(ERROR_INVALID_DATA);
+				return FALSE;
+			}
+
+			LPDWORD lpdwMasks = (LPDWORD)(lpbi + sizeof(BITMAPINFOHEADER));
+
+			OutputText(hwndEdit, g_szSepThin);
+			OutputTextFmt(hwndEdit, TEXT("RedMask:\t%08X\r\n"), lpdwMasks[0]);
+			OutputTextFmt(hwndEdit, TEXT("GreenMask:\t%08X\r\n"), lpdwMasks[1]);
+			OutputTextFmt(hwndEdit, TEXT("BlueMask:\t%08X\r\n"), lpdwMasks[2]);
+
+			// Windows CE extension
+			if (lpbih->bV5Compression == BI_ALPHABITFIELDS)
+				OutputTextFmt(hwndEdit, TEXT("AlphaMask:\t%08X\r\n"), lpdwMasks[3]);
+		}
+	}
+
+	if (dwDibHeaderSize != sizeof(BITMAPINFOHEADER2))
+	{
+		if (dwDibHeaderSize >= sizeof(BITMAPV2INFOHEADER))
+		{ // Adobe Photoshop extension
+			OutputTextFmt(hwndEdit, TEXT("RedMask:\t%08X\r\n"), lpbih->bV5RedMask);
+			OutputTextFmt(hwndEdit, TEXT("GreenMask:\t%08X\r\n"), lpbih->bV5GreenMask);
+			OutputTextFmt(hwndEdit, TEXT("BlueMask:\t%08X\r\n"), lpbih->bV5BlueMask);
+		}
+
+		if (dwDibHeaderSize >= sizeof(BITMAPV3INFOHEADER))
+		{ // Adobe Photoshop extension
+			OutputTextFmt(hwndEdit, TEXT("AlphaMask:\t%08X\r\n"), lpbih->bV5AlphaMask);
+		}
+	}
+
+	if (dwDibHeaderSize >= sizeof(BITMAPV4HEADER))
+	{ // Win32 Version 4.0 Bitmap (DIBv4, ICM 1.0)
+		DWORD dwCSType = lpbih->bV5CSType;
+		OutputText(hwndEdit, TEXT("CSType:\t\t"));
+		if (isprint(dwCSType & 0xff) &&
+			isprint((dwCSType >>  8) & 0xff) &&
+			isprint((dwCSType >> 16) & 0xff) &&
+			isprint((dwCSType >> 24) & 0xff))
+		{
+			OutputTextFmt(hwndEdit, TEXT("%hc%hc%hc%hc"),
+				(char)((dwCSType >> 24) & 0xff),
+				(char)((dwCSType >> 16) & 0xff),
+				(char)((dwCSType >>  8) & 0xff),
+				(char)(dwCSType & 0xff));
+		}
+		else
+		{
+			switch (dwCSType)
+			{
+				case LCS_CALIBRATED_RGB:
+					OutputText(hwndEdit, TEXT("CALIBRATED_RGB"));
+					break;
+				case LCS_DEVICE_RGB:
+					OutputText(hwndEdit, TEXT("DEVICE_RGB"));
+					break;
+				case LCS_DEVICE_CMYK:
+					OutputText(hwndEdit, TEXT("DEVICE_CMYK"));
+					break;
+				default:
+					OutputTextFmt(hwndEdit, TEXT("%u"), dwCSType);
+			}
+		}
+		OutputText(hwndEdit, TEXT("\r\n"));
+
+		OutputTextFmt(hwndEdit, TEXT("CIEXYZRed:\t%.4f, %.4f, %.4f\r\n"),
+			(double)lpbih->bV5Endpoints.ciexyzRed.ciexyzX / 0x40000000,
+			(double)lpbih->bV5Endpoints.ciexyzRed.ciexyzY / 0x40000000,
+			(double)lpbih->bV5Endpoints.ciexyzRed.ciexyzZ / 0x40000000);
+		OutputTextFmt(hwndEdit, TEXT("CIEXYZGreen:\t%.4f, %.4f, %.4f\r\n"),
+			(double)lpbih->bV5Endpoints.ciexyzGreen.ciexyzX / 0x40000000,
+			(double)lpbih->bV5Endpoints.ciexyzGreen.ciexyzY / 0x40000000,
+			(double)lpbih->bV5Endpoints.ciexyzGreen.ciexyzZ / 0x40000000);
+		OutputTextFmt(hwndEdit, TEXT("CIEXYZBlue:\t%.4f, %.4f, %.4f\r\n"),
+			(double)lpbih->bV5Endpoints.ciexyzBlue.ciexyzX / 0x40000000,
+			(double)lpbih->bV5Endpoints.ciexyzBlue.ciexyzY / 0x40000000,
+			(double)lpbih->bV5Endpoints.ciexyzBlue.ciexyzZ / 0x40000000);
+
+		OutputTextFmt(hwndEdit, TEXT("GammaRed:\t%g\r\n"), (double)lpbih->bV5GammaRed / 0x10000);
+		OutputTextFmt(hwndEdit, TEXT("GammaGreen:\t%g\r\n"), (double)lpbih->bV5GammaGreen / 0x10000);
+		OutputTextFmt(hwndEdit, TEXT("GammaBlue:\t%g\r\n"), (double)lpbih->bV5GammaBlue / 0x10000);
+	}
+
+	if (dwDibHeaderSize >= sizeof(BITMAPV5HEADER))
+	{ // Win32 Version 5.0 Bitmap (DIBv5, ICM 2.0)
+		DWORD dwIntent = lpbih->bV5Intent;
+		OutputText(hwndEdit, TEXT("Intent:\t\t"));
+		switch (dwIntent)
+		{
+			case LCS_GM_BUSINESS:
+				OutputText(hwndEdit, TEXT("GM_BUSINESS (Saturation)"));
+				break;
+			case LCS_GM_GRAPHICS:
+				OutputText(hwndEdit, TEXT("GM_GRAPHICS (Relative Colorimetric)"));
+				break;
+			case LCS_GM_IMAGES:
+				OutputText(hwndEdit, TEXT("GM_IMAGES (Perceptual)"));
+				break;
+			case LCS_GM_ABS_COLORIMETRIC:
+				OutputText(hwndEdit, TEXT("GM_ABS_COLORIMETRIC (Absolute Colorimetric)"));
+				break;
+			default:
+				OutputTextFmt(hwndEdit, TEXT("%u"), dwIntent);
+		}
+		OutputText(hwndEdit, TEXT("\r\n"));
+
+		OutputTextFmt(hwndEdit, TEXT("ProfileData:\t%u bytes\r\n"), lpbih->bV5ProfileData);
+		OutputTextFmt(hwndEdit, TEXT("ProfileSize:\t%u bytes\r\n"), lpbih->bV5ProfileSize);
+		OutputTextFmt(hwndEdit, TEXT("Reserved:\t%u\r\n"), lpbih->bV5Reserved);
+	}
+
+	// Output the color table entries
+	UINT uNumColors = min(DibNumColors(lpbi), 4096);
+	if (uNumColors > 0)
+	{
+		if (DibBitsOffset(lpbi) > dwDibSize)
+		{
+			GlobalUnlock(hDib);
+			SetLastError(ERROR_INVALID_DATA);
+			return FALSE;
+		}
+
+		OutputText(hwndEdit, g_szSepThin);
+		LPCTSTR lpszColorName = TEXT("");
+		int nWidthDec = uNumColors > 1000 ? 4 : (uNumColors > 100 ? 3 : (uNumColors > 10 ? 2 : 1));
+		int nWidthHex = uNumColors > 0x100 ? 3 : (uNumColors > 0x10 ? 2 : 1);
+
+		if (IS_OS2PM_DIB(lpbi))
+		{
+			OutputTextFmt(hwndEdit, TEXT("%*c|   B   G   R |%-*c| B  G  R  |\r\n"), nWidthDec, 'I', nWidthHex, 'I');
+
+			LPBITMAPCOREINFO lpbmc = (LPBITMAPCOREINFO)lpbi;
+			for (UINT i = 0; i < uNumColors; i++)
+			{
+				OutputTextFmt(hwndEdit, TEXT("%*u| %3u %3u %3u |%0*X| %02X %02X %02X |"),
+					nWidthDec, i,
+					lpbmc->bmciColors[i].rgbtBlue,
+					lpbmc->bmciColors[i].rgbtGreen,
+					lpbmc->bmciColors[i].rgbtRed,
+					nWidthHex, i,
+					lpbmc->bmciColors[i].rgbtBlue,
+					lpbmc->bmciColors[i].rgbtGreen,
+					lpbmc->bmciColors[i].rgbtRed);
+
+				if (GetColorName(RGB(
+					lpbmc->bmciColors[i].rgbtRed,
+					lpbmc->bmciColors[i].rgbtGreen,
+					lpbmc->bmciColors[i].rgbtBlue),
+					&lpszColorName))
+					OutputTextFmt(hwndEdit, TEXT(" %s"), lpszColorName);
+
+				OutputText(hwndEdit, TEXT("\r\n"));
+			}
+		}
+		else
+		{
+			OutputTextFmt(hwndEdit, TEXT("%*c|   B   G   R   X |%-*c| B  G  R  X  |\r\n"), nWidthDec, 'I', nWidthHex, 'I');
+
+			LPRGBQUAD lprgbqColors = (LPRGBQUAD)FindDibPalette(lpbi);
+			for (UINT i = 0; i < uNumColors; i++)
+			{
+				OutputTextFmt(hwndEdit, TEXT("%*u| %3u %3u %3u %3u |%0*X| %02X %02X %02X %02X |"),
+					nWidthDec, i,
+					lprgbqColors[i].rgbBlue,
+					lprgbqColors[i].rgbGreen,
+					lprgbqColors[i].rgbRed,
+					lprgbqColors[i].rgbReserved,
+					nWidthHex, i,
+					lprgbqColors[i].rgbBlue,
+					lprgbqColors[i].rgbGreen,
+					lprgbqColors[i].rgbRed,
+					lprgbqColors[i].rgbReserved,
+					lpszColorName);
+
+				if (GetColorName(RGB(
+					lprgbqColors[i].rgbRed,
+					lprgbqColors[i].rgbGreen,
+					lprgbqColors[i].rgbBlue),
+					&lpszColorName))
+					OutputTextFmt(hwndEdit, TEXT(" %s"), lpszColorName);
+
+				OutputText(hwndEdit, TEXT("\r\n"));
+			}
+		}
+	}
+
+	// Check for a gap between color table and bitmap bits
+	DWORD dwOffBitsPacked = DibBitsOffset(lpbi);
+
+	if ((dwOffBits != 0 ? dwOffBits : dwOffBitsPacked) > dwDibSize)
+	{
+		GlobalUnlock(hDib);
+		SetLastError(ERROR_INVALID_DATA);
+		return FALSE;
+	}
+
+	if (dwOffBits > dwOffBitsPacked)
+	{
+		DWORD dwGap = dwOffBits - dwOffBitsPacked;
+
+		// Declare the gap as (additional) color table entries to get a packed DIB.
+		// This requires that DibNumColors from the DIB API accepts more than 256 colors.
+		if (dwDibHeaderSize >= sizeof(BITMAPINFOHEADER))
+			lpbih->bV5ClrUsed += dwGap / sizeof(RGBQUAD);
+
+		OutputText(hwndEdit, g_szSepThin);
+		OutputTextFmt(hwndEdit, TEXT("Gap to pixels:\t%u bytes\r\n"), dwGap);
+	}
+	else if (dwOffBits != 0 && dwOffBitsPacked > dwOffBits)
+	{ // Color table overlaps bitmap bits
+		DWORD dwOverlap = dwOffBitsPacked - dwOffBits;
+
+		OutputText(hwndEdit, g_szSepThin);
+		OutputTextFmt(hwndEdit, TEXT("Gap to pixels:\t-%u bytes\r\n"), dwOverlap);
+
+		DWORD dwNumEntries = DibNumColors(lpbi);
+		if (dwNumEntries > 0)
+		{
+			if (dwDibHeaderSize == sizeof(BITMAPCOREHEADER))
+			{ // Add the missing color table entries to the DIB
+				dwDibSize += dwOverlap;
+
+				GlobalUnlock(hDib);
+				HANDLE hTemp = GlobalReAlloc(hDib, dwDibSize, GHND);
+				if (hTemp == NULL)
+					return FALSE;
+
+				hDib = hTemp;
+				lpbi = (LPSTR)GlobalLock(hDib);
+				lpbih = (LPBITMAPV5HEADER)lpbi;
+				if (lpbi == NULL)
+					return FALSE;
+
+				LPSTR lpOld = lpbi + dwOffBits;
+				LPSTR lpNew = lpbi + dwOffBitsPacked;
+
+				__try
+				{
+					dwOffBits = dwOffBitsPacked;
+					MoveMemory(lpNew, lpOld, dwDibSize - dwOffBits);
+					ZeroMemory(lpOld, dwOverlap);
+				}
+				__except (EXCEPTION_EXECUTE_HANDLER) { ; }
+			}
+			else
+			{ // Adjust the number of color table entries
+				DWORD dwAddEntries = dwOverlap / sizeof(RGBQUAD);
+
+				if (dwNumEntries > dwAddEntries)
+					lpbih->bV5ClrUsed = dwNumEntries - dwAddEntries;
+			}
+		}
+	}
+
+	// Output the ICC profile data
+	if (DibHasColorProfile(lpbi))
+	{
+		TCHAR szOutput[OUTPUT_LEN];
+
+		if ((lpbih->bV5ProfileData + lpbih->bV5ProfileSize) > dwDibSize)
+		{
+			GlobalUnlock(hDib);
+			SetLastError(ERROR_INVALID_DATA);
+			return FALSE;
+		}
+
+		// Check for a gap between bitmap bits and profile data
+		DWORD dwProfileData = DibBitsOffset(lpbi) + DibImageSize(lpbi);
+		if (lpbih->bV5ProfileData > dwProfileData)
+		{
+			OutputText(hwndEdit, g_szSepThin);
+			OutputTextFmt(hwndEdit, TEXT("Gap to profile:\t%u bytes\r\n"), lpbih->bV5ProfileData - dwProfileData);
+		}
+
+		if (lpbih->bV5CSType == PROFILE_LINKED)
+		{
+			char szPath[MAX_PATH];
+			int nLen = min(min(lpbih->bV5ProfileSize + 1, dwDibSize - lpbih->bV5ProfileData + 1), _countof(szPath));
+
+			// Output the file name of the ICC profile
+			ZeroMemory(szPath, sizeof(szPath));
+			if (MyStrNCpyA(szPath, lpbi + lpbih->bV5ProfileData, nLen) != NULL)
+			{
+				MultiByteToWideChar(1252, 0, szPath, -1, szOutput, _countof(szOutput) - 1);
+				
+				OutputText(hwndEdit, g_szSepThin);
+				OutputText(hwndEdit, szOutput);
+				OutputText(hwndEdit, TEXT("\r\n"));
+			}
+		}
+		else if (lpbih->bV5CSType == PROFILE_EMBEDDED)
+		{
+			if (lpbih->bV5ProfileSize < (sizeof(PROFILEV5HEADER) + sizeof(DWORD)))
+			{
+				GlobalUnlock(hDib);
+				SetLastError(ERROR_INVALID_DATA);
+				return FALSE;
+			}
+
+			// Output the ICC profile header
+			LPPROFILEV5HEADER lpph = (LPPROFILEV5HEADER)(lpbi + lpbih->bV5ProfileData);
+			DWORD dwVersion = _byteswap_ulong(lpph->phVersion);
+
+			if (_byteswap_ulong(lpph->phSignature) != 'acsp' && dwVersion != 0x00000100)
+				goto Exit;
+
+			OutputText(hwndEdit, g_szSepThin);
+			OutputTextFmt(hwndEdit, TEXT("ProfileSize:\t%u bytes\r\n"), _byteswap_ulong(lpph->phSize));
+
+			PrintProfileSignature(hwndEdit, TEXT("CMMType:\t"), lpph->phCMMType);
+
+			if (dwVersion == 0x00000100)
+			{ // Apple ColorSync 1.0 profile
+				OutputText(hwndEdit, TEXT("Version:\t1.0\r\n"));
+				goto Exit; // No more identical header members
+			}
+
+			WORD wProfileVersion  = HIWORD(dwVersion);
+			WORD wSubClassVersion = LOWORD(dwVersion);
+			OutputTextFmt(hwndEdit, TEXT("Version:\t%u.%u.%u\r\n"), HIBYTE(wProfileVersion),
+				(LOBYTE(wProfileVersion) >> 4) & 0xF, LOBYTE(wProfileVersion) & 0xF);
+			if (wProfileVersion >= 0x0500 && lpph->phSubClass != 0)
+				OutputTextFmt(hwndEdit, TEXT("SubVersion:\t%u.%u\r\n"),
+					HIBYTE(wSubClassVersion), LOBYTE(wSubClassVersion));
+
+			PrintProfileSignature(hwndEdit, TEXT("Class:\t\t"), lpph->phClass);
+			PrintProfileSignature(hwndEdit, TEXT("ColorSpace:\t"), lpph->phDataColorSpace);
+			PrintProfileSignature(hwndEdit, TEXT("PCS:\t\t"), lpph->phConnectionSpace);
+
+			OutputTextFmt(hwndEdit, TEXT("DateTime:\t%02u-%02u-%02u %02u:%02u:%02u\r\n"),
+				_byteswap_ushort(LOWORD(lpph->phDateTime[0])),
+				_byteswap_ushort(HIWORD(lpph->phDateTime[0])),
+				_byteswap_ushort(LOWORD(lpph->phDateTime[1])),
+				_byteswap_ushort(HIWORD(lpph->phDateTime[1])),
+				_byteswap_ushort(LOWORD(lpph->phDateTime[2])),
+				_byteswap_ushort(HIWORD(lpph->phDateTime[2])));
+
+			PrintProfileSignature(hwndEdit, TEXT("Signature:\t"), lpph->phSignature);
+			PrintProfileSignature(hwndEdit, TEXT("Platform:\t"), lpph->phPlatform);
+
+			DWORD dwProfileFlags = _byteswap_ulong(lpph->phProfileFlags);
+			OutputTextFmt(hwndEdit, TEXT("ProfileFlags:\t%08X"), dwProfileFlags);
+			if (dwProfileFlags != 0)
+			{
+				szOutput[0] = TEXT('\0');
+				DWORD dwFlags = dwProfileFlags;
+
+				if (dwProfileFlags & FLAG_EMBEDDEDPROFILE)
+				{
+					dwFlags ^= FLAG_EMBEDDEDPROFILE;
+					AppendFlagName(szOutput, _countof(szOutput), TEXT("EMBEDDEDPROFILE"));
+				}
+
+				if (dwProfileFlags & FLAG_DEPENDENTONDATA)
+				{
+					dwFlags ^= FLAG_DEPENDENTONDATA;
+					AppendFlagName(szOutput, _countof(szOutput), TEXT("DEPENDENTONDATA"));
+				}
+
+				if (dwProfileFlags & FLAG_MCSNEEDSSUBSET)
+				{
+					dwFlags ^= FLAG_MCSNEEDSSUBSET;
+					AppendFlagName(szOutput, _countof(szOutput), TEXT("MCSNEEDSSUBSET"));
+				}
+
+				if (dwFlags != 0 && dwFlags != dwProfileFlags)
+				{
+					const int FLAGS_LEN = 32;
+					TCHAR szFlags[FLAGS_LEN];
+					_sntprintf(szFlags, _countof(szFlags), TEXT("%08X"), dwFlags);
+					szFlags[FLAGS_LEN - 1] = TEXT('\0');
+					AppendFlagName(szOutput, _countof(szOutput), szFlags);
+				}
+
+				if (szOutput[0] != TEXT('\0'))
+				{
+					OutputText(hwndEdit, TEXT(" ("));
+					OutputText(hwndEdit, szOutput);
+					OutputText(hwndEdit, TEXT(")"));
+				}
+			}
+			OutputText(hwndEdit, TEXT("\r\n"));
+
+			PrintProfileSignature(hwndEdit, TEXT("Manufacturer:\t"), lpph->phManufacturer);
+			PrintProfileSignature(hwndEdit, TEXT("Model:\t\t"), lpph->phModel);
+
+			UINT64 ullAttributes = _byteswap_ulong(lpph->phAttributes[0]);
+			ullAttributes |= (UINT64)_byteswap_ulong(lpph->phAttributes[1]) << 32;
+			OutputTextFmt(hwndEdit, TEXT("Attributes:\t%016llX"), ullAttributes);
+			if (ullAttributes != 0)
+			{
+				szOutput[0] = TEXT('\0');
+				UINT64 ullFlags = ullAttributes;
+
+				if (ullAttributes & ATTRIB_TRANSPARENCY)
+				{
+					ullFlags ^= ATTRIB_TRANSPARENCY;
+					AppendFlagName(szOutput, _countof(szOutput), TEXT("TRANSPARENCY"));
+				}
+
+				if (ullAttributes & ATTRIB_MATTE)
+				{
+					ullFlags ^= ATTRIB_MATTE;
+					AppendFlagName(szOutput, _countof(szOutput), TEXT("MATTE"));
+				}
+
+				if (ullAttributes & ATTRIB_MEDIANEGATIVE)
+				{
+					ullFlags ^= ATTRIB_MEDIANEGATIVE;
+					AppendFlagName(szOutput, _countof(szOutput), TEXT("MEDIANEGATIVE"));
+				}
+
+				if (ullAttributes & ATTRIB_MEDIABLACKANDWHITE)
+				{
+					ullFlags ^= ATTRIB_MEDIABLACKANDWHITE;
+					AppendFlagName(szOutput, _countof(szOutput), TEXT("MEDIABLACKANDWHITE"));
+				}
+
+				if (ullAttributes & ATTRIB_NONPAPERBASED)
+				{
+					ullFlags ^= ATTRIB_NONPAPERBASED;
+					AppendFlagName(szOutput, _countof(szOutput), TEXT("NONPAPERBASED"));
+				}
+
+				if (ullAttributes & ATTRIB_TEXTURED)
+				{
+					ullFlags ^= ATTRIB_TEXTURED;
+					AppendFlagName(szOutput, _countof(szOutput), TEXT("TEXTURED"));
+				}
+
+				if (ullAttributes & ATTRIB_NONISOTROPIC)
+				{
+					ullFlags ^= ATTRIB_NONISOTROPIC;
+					AppendFlagName(szOutput, _countof(szOutput), TEXT("NONISOTROPIC"));
+				}
+
+				if (ullAttributes & ATTRIB_SELFLUMINOUS)
+				{
+					ullFlags ^= ATTRIB_SELFLUMINOUS;
+					AppendFlagName(szOutput, _countof(szOutput), TEXT("SELFLUMINOUS"));
+				}
+
+				if (ullFlags != 0 && ullFlags != ullAttributes)
+				{
+					const int FLAGS_LEN = 32;
+					TCHAR szFlags[FLAGS_LEN];
+					_sntprintf(szFlags, _countof(szFlags), TEXT("%016llX"), ullFlags);
+					szFlags[FLAGS_LEN - 1] = TEXT('\0');
+					AppendFlagName(szOutput, _countof(szOutput), szFlags);
+				}
+
+				if (szOutput[0] != TEXT('\0'))
+				{
+					OutputText(hwndEdit, TEXT(" ("));
+					OutputText(hwndEdit, szOutput);
+					OutputText(hwndEdit, TEXT(")"));
+				}
+			}
+			OutputText(hwndEdit, TEXT("\r\n"));
+
+			DWORD dwhRenderingIntent = _byteswap_ulong(lpph->phRenderingIntent);
+			OutputText(hwndEdit, TEXT("Intent:\t\t"));
+			switch (dwhRenderingIntent)
+			{
+				case INTENT_PERCEPTUAL:
+					OutputText(hwndEdit, TEXT("PERCEPTUAL"));
+					break;
+				case INTENT_RELATIVE_COLORIMETRIC:
+					OutputText(hwndEdit, TEXT("RELATIVE_COLORIMETRIC"));
+					break;
+				case INTENT_SATURATION:
+					OutputText(hwndEdit, TEXT("SATURATION"));
+					break;
+				case INTENT_ABSOLUTE_COLORIMETRIC:
+					OutputText(hwndEdit, TEXT("ABSOLUTE_COLORIMETRIC"));
+					break;
+				default:
+					OutputTextFmt(hwndEdit, TEXT("%u"), dwhRenderingIntent);
+			}
+			OutputText(hwndEdit, TEXT("\r\n"));
+
+			OutputTextFmt(hwndEdit, TEXT("Illuminant:\t%.4f, %.4f, %.4f\r\n"),
+				(double)(LONG32)_byteswap_ulong(lpph->phIlluminant.ciexyzX) / 0x10000,
+				(double)(LONG32)_byteswap_ulong(lpph->phIlluminant.ciexyzY) / 0x10000,
+				(double)(LONG32)_byteswap_ulong(lpph->phIlluminant.ciexyzZ) / 0x10000);
+
+			PrintProfileSignature(hwndEdit, TEXT("Creator:\t"), lpph->phCreator);
+
+			if (wProfileVersion >= 0x0400)
+			{
+				ZeroMemory(szOutput, sizeof(szOutput));
+				for (SIZE_T i = 0; i < _countof(lpph->phProfileID); i++)
+					_sntprintf(szOutput, _countof(szOutput), TEXT("%s%02X"), (LPTSTR)szOutput, lpph->phProfileID[i]);
+
+				OutputText(hwndEdit, TEXT("ProfileID:\t"));
+				OutputText(hwndEdit, szOutput);
+				OutputText(hwndEdit, TEXT("\r\n"));
+			}
+
+			if (wProfileVersion >= 0x0500)
+			{
+				PrintProfileSignature(hwndEdit, TEXT("SpectralPCS:\t"), lpph->phSpectralPCS);
+
+				OutputTextFmt(hwndEdit, TEXT("SpectralRange:\t%g nm - %g nm, %u steps\r\n"),
+					Half2Float(_byteswap_ushort(lpph->phSpectralRange[0])),
+					Half2Float(_byteswap_ushort(lpph->phSpectralRange[1])),
+					_byteswap_ushort(lpph->phSpectralRange[2]));
+
+				OutputTextFmt(hwndEdit, TEXT("BiSpectrRange:\t%g nm - %g nm, %u steps\r\n"),
+					Half2Float(_byteswap_ushort(lpph->phBiSpectralRange[0])),
+					Half2Float(_byteswap_ushort(lpph->phBiSpectralRange[1])),
+					_byteswap_ushort(lpph->phBiSpectralRange[2]));
+
+				PrintProfileSignature(hwndEdit, TEXT("MCS:\t\t"), lpph->phMCS);
+				PrintProfileSignature(hwndEdit, TEXT("SubClass:\t"), lpph->phSubClass);
+			}
+
+			// Output the tag table
+			LPDWORD lpdwTagTable = (LPDWORD)(lpbi + lpbih->bV5ProfileData + sizeof(PROFILEV5HEADER));
+			DWORD dwTagCount = _byteswap_ulong(*lpdwTagTable);
+
+			OutputText(hwndEdit, g_szSepThin);
+			OutputTextFmt(hwndEdit, TEXT("TagCount:\t%u\r\n"), dwTagCount);
+
+			if (dwTagCount == 0)
+				goto Exit;
+
+			if (lpbih->bV5ProfileSize < (sizeof(PROFILEV5HEADER) + sizeof(DWORD) + 3 * sizeof(DWORD) * dwTagCount))
+			{
+				GlobalUnlock(hDib);
+				SetLastError(ERROR_INVALID_DATA);
+				return FALSE;
+			}
+
+			// Side note: The private tag 'ICC5' indicates that an iccMAX profile (tag type signature: 'ICCp')
+			// is embedded in an ICC v2 or v4 profile, and the private tag 'MS00' indicates that WCS profile
+			// data (type signature: 'MS10') is embedded in an (output) ICC profile
+
+			OutputText(hwndEdit, g_szSepThin);
+			OutputText(hwndEdit, TEXT("Sig. | Element Offset | Element Size |\r\n"));
+
+			LPDWORD lpdwTags = lpdwTagTable + 1;
+			while (dwTagCount--)
+			{
+				PrintProfileSignature(hwndEdit, NULL, *lpdwTags++, FALSE);
+				OutputTextFmt(hwndEdit, TEXT(" | %8u bytes"), _byteswap_ulong(*lpdwTags++));
+				OutputTextFmt(hwndEdit, TEXT(" | %6u bytes"), _byteswap_ulong(*lpdwTags++));
+				OutputText(hwndEdit, TEXT(" |\r\n"));
+			}
+		}
+	}
+
+Exit:
+	GlobalUnlock(hDib);
+
+	if (!bIsDibDisplayable)
+	{
+		SetThumbnailText(hwndThumb, IDS_UNSUPPORTED);
+		return FALSE;
+	}
+
+	ReplaceThumbnail(hwndThumb, hDib);
+
+	return TRUE;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////
+
+void PrintProfileSignature(HWND hwndEdit, LPCTSTR lpszName, DWORD dwSignature, BOOL bAddCrLf)
+{
+	if (hwndEdit == NULL)
+		return;
+
+	if (lpszName != NULL)
+		OutputText(hwndEdit, lpszName);
+
+	if (dwSignature == 0)
+		OutputText(hwndEdit, TEXT("0"));
+	else
+		if (isprint(dwSignature & 0xff) &&
+			isprint((dwSignature >>  8) & 0xff) &&
+			isprint((dwSignature >> 16) & 0xff) &&
+			isprint((dwSignature >> 24) & 0xff))
+		{ // Sequence of four characters
+			OutputTextFmt(hwndEdit, TEXT("%hc%hc%hc%hc"),
+				(char)(dwSignature & 0xff),
+				(char)((dwSignature >>  8) & 0xff),
+				(char)((dwSignature >> 16) & 0xff),
+				(char)((dwSignature >> 24) & 0xff));
+		}
+		else
+			if (isprint(dwSignature & 0xff) &&
+				isprint((dwSignature >> 8) & 0xff))
+			{ // Extended colour space signature
+				OutputTextFmt(hwndEdit, TEXT("%hc%hc%02X%02X"),
+					(char)(dwSignature & 0xff),
+					(char)((dwSignature >>  8) & 0xff),
+					(BYTE)((dwSignature >> 16) & 0xff),
+					(BYTE)((dwSignature >> 24) & 0xff));
+			}
+			else
+				OutputTextFmt(hwndEdit, TEXT("%08X"), _byteswap_ulong(dwSignature));
+
+	if (bAddCrLf)
+		OutputText(hwndEdit, TEXT("\r\n"));
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////
+
+BOOL GetColorName(COLORREF rgbColor, LPCTSTR* lpszName)
+{
+	if (lpszName == NULL)
+		return FALSE;
+
+	*lpszName = TEXT("");
+	size_t count = sizeof(g_aColorNames) / sizeof(ColorName);
+
+	for (size_t i = 0; i < count; i++)
+	{
+		if (g_aColorNames[i].rgbColor == rgbColor)
+		{
+			*lpszName = g_aColorNames[i].lpszName;
+			return TRUE;
+		}
+	}
+
+	return FALSE;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////
+
+float Half2Float(WORD h)
+{
+	DWORD f = h ? ((h & 0x8000) << 16) | (((h & 0x7C00) + 0x1C000) << 13) | ((h & 0x03FF) << 13) : 0;
+
+	return *((float*)((void*)&f));
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////
