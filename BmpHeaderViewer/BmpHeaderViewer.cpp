@@ -913,7 +913,8 @@ INT_PTR CALLBACK HeaderViewerDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPA
 						if (lpbi == NULL)
 							EnableMenuItem(hmenuTrackPopup, IDC_THUMB_SAVE, MF_BYCOMMAND | MF_GRAYED);
 
-						GlobalUnlock(g_hDibThumb);
+						if (lpbi != NULL)
+							GlobalUnlock(g_hDibThumb);
 					}
 					else
 					{
@@ -1736,21 +1737,25 @@ BOOL SetWordWrap(HWND hDlg, BOOL bWordWrap)
 	if (hwndEditOld == NULL)
 		return FALSE;
 
-	// Remove subclassing
-	if (g_lpPrevOutputWndProc != NULL)
-		SubclassWindow(hwndEditOld, g_lpPrevOutputWndProc);
-
 	// Save text and status of the edit control
+	int nLen = Edit_GetTextLength(hwndEditOld);
+	LPTSTR pszSaveText = (LPTSTR)MyGlobalAllocPtr(GHND, ((SIZE_T)nLen + 1) * sizeof(TCHAR));
+	if (pszSaveText == NULL)
+		return FALSE;
+
+	Edit_GetText(hwndEditOld, pszSaveText, nLen + 1);
+
 	RECT rcProp;
 	RetrieveWindowRect(hwndEditOld, &rcProp);
 	HFONT hFont = GetWindowFont(hwndEditOld);
-	int nLen = Edit_GetTextLength(hwndEditOld);
-	LPTSTR pszSaveText = (LPTSTR)MyGlobalAllocPtr(GHND, ((SIZE_T)nLen + 1) * sizeof(TCHAR));
-	Edit_GetText(hwndEditOld, pszSaveText, nLen + 1);
+	BOOL bHasFocus = (GetFocus() == hwndEditOld);
 	DWORD dwSelStart = (DWORD)nLen;
 	DWORD dwSelEnd = (DWORD)nLen;
-	BOOL bHasFocus = (GetFocus() == hwndEditOld);
 	SendMessage(hwndEditOld, EM_GETSEL, (WPARAM)&dwSelStart, (LPARAM)&dwSelEnd);
+
+	// Remove subclassing
+	if (g_lpPrevOutputWndProc != NULL)
+		SubclassWindow(hwndEditOld, g_lpPrevOutputWndProc);
 
 	// Create a new edit control in the desired style
 	DWORD dwExStyle = GetWindowExStyle(hwndEditOld);
@@ -1860,12 +1865,12 @@ BOOL LoadSettings(LPWINDOWPLACEMENT lpWindowPlacement, LPLONG lpFontHeight)
 
 void SaveSettings(HWND hDlg, HFONT hFont)
 {
-	WINDOWPLACEMENT wpl = {0};
+	WINDOWPLACEMENT wpl = { 0 };
 	wpl.length = sizeof(wpl);
 	if (hDlg != NULL)
 		GetWindowPlacement(hDlg, &wpl);
 
-	LOGFONT lf = {0};
+	LOGFONT lf = { 0 };
 	if (hFont != NULL)
 		GetObject(hFont, sizeof(LOGFONT), (LPVOID)&lf);
 
@@ -1894,7 +1899,7 @@ BOOL MySetWindowPlacement(HWND hWnd, const LPWINDOWPLACEMENT lpwndpl, BOOL bUseS
 	if (hMonitor == NULL)
 		return FALSE;
 
-	MONITORINFO mi = {0};
+	MONITORINFO mi = { 0 };
 	mi.cbSize = sizeof(mi);
 	if (!GetMonitorInfo(hMonitor, &mi))
 		return FALSE;
