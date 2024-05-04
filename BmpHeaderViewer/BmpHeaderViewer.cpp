@@ -665,9 +665,9 @@ INT_PTR CALLBACK HeaderViewerDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPA
 
 						OutputText(hwndEdit, TEXT("Format:\t\t"));
 						if (uFormat == CF_DIB)
-							OutputText(hwndEdit, TEXT("CF_DIB"));
+							OutputText(hwndEdit, TEXT("DIB"));
 						else if (uFormat == CF_DIBV5)
-							OutputText(hwndEdit, TEXT("CF_DIBV5"));
+							OutputText(hwndEdit, TEXT("DIBV5"));
 						else
 							OutputTextFmt(hwndEdit, TEXT("%u"), uFormat);
 						OutputText(hwndEdit, TEXT("\r\n"));
