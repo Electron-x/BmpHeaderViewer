@@ -370,11 +370,15 @@ Bitmaps in multiple-version format and truncated OS/2 2.0-style DIBs, as describ
 
 Only the header and the tag table of an embedded color profile are displayed. However, the profile can be exported for further examination, e.g. with the [ICC Profile Inspector](https://www.color.org/profileinspector.xalter) or using [iccDumpProfile](https://github.com/InternationalColorConsortium/DemoIccMAX).
 
+In this version, the bitmap parser reads the entire DIB as a single chunk. However, some functions of the used DIB API require a packed DIB. To close an existing gap between the header/color table and the bitmap bits, the color table is modified accordingly for such DIBs. This has no effect on the displayed data.
+
 Standard DIBs and DIBs with DIB format extensions are displayed directly using Windows GDI. No format conversion takes place. For custom formats, the DrawDib API from Video for Windows is used. No other codec-based frameworks such as Windows Imaging Component are used.
 
-Color matching is performed on-the-fly using [ICM inside DC](https://learn.microsoft.com/en-us/windows/win32/api/wingdi/nf-wingdi-seticmmode). As ICM outside DC is not supported, DIBs with transparent pixels are displayed without color matching. DIBs with linked ICC profiles are not supported. In the Color Management dialog box, intent selection and proofing are not supported.
+Image color management is performed on-the-fly using [ICM inside DC](https://learn.microsoft.com/en-us/windows/win32/api/wingdi/nf-wingdi-seticmmode). As ICM outside DC is not supported, DIBs with transparent pixels are displayed without color matching. DIBs with linked ICC profiles are not supported. In the Color Management dialog box, intent selection and proofing are not supported.
 
 The dark mode of Windows 10 1809+ is only rudimentarily supported (limited to the main window).
+
+Windows Vista or later is required to run the program.
 
 There is no installer for the application.
 
