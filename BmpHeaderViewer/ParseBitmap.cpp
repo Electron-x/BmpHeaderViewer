@@ -68,7 +68,7 @@ BOOL ParseBitmap(HWND hDlg, HANDLE hFile, DWORD dwFileSize)
 		return FALSE;
 
 	if (bfh.bfType == BFT_BITMAPARRAY)
-	{ // OS/2 Bit-map Array
+	{ // OS/2 Bitmap Array
 		LPBITMAPARRAYFILEHEADER lpbafh = (LPBITMAPARRAYFILEHEADER)&bfh;
 
 		OutputText(hwndEdit, g_szSepThin);
@@ -134,9 +134,7 @@ BOOL ParseBitmap(HWND hDlg, HANDLE hFile, DWORD dwFileSize)
 		return FALSE;
 	}
 
-	// ParseDIBitmap (see below) can be used to examine a DIB object from
-	// the clipboard. To use this function, we read in the entire DIB. If
-	// necessary, we can obtain a packed DIB by modifying the color table.
+	// Read in the entire DIB
 	if (!MyReadFile(hFile, lpbi, dwDibSize))
 	{
 		DWORD dwError = GetLastError();
@@ -631,16 +629,31 @@ BOOL ParseDIBitmap(HWND hDlg, HANDLE hDib, DWORD dwOffBits)
 	}
 
 	if (dwOffBits > dwOffBitsPacked)
-	{
+	{ // Gap between color table and bitmap bits present
 		DWORD dwGap = dwOffBits - dwOffBitsPacked;
-
-		// Declare the gap as (additional) color table entries to get a packed DIB.
-		// This requires that DibNumColors from the DIB API accepts more than 256 colors.
-		if (dwDibHeaderSize >= sizeof(BITMAPINFOHEADER))
-			lpbih->bV5ClrUsed += dwGap / sizeof(RGBQUAD);
 
 		OutputText(hwndEdit, g_szSepThin);
 		OutputTextFmt(hwndEdit, TEXT("Gap to pixels:\t%u bytes\r\n"), dwGap);
+
+		// Remove the gap to obtain a packed DIB
+		DWORD dwDibSizePacked = dwDibSize - dwGap;
+
+		__try
+		{
+			MoveMemory(lpbi + dwOffBitsPacked, lpbi + dwOffBits, dwDibSize - dwOffBits);
+			ZeroMemory(lpbi + dwDibSizePacked, dwGap);
+		}
+		__except (EXCEPTION_EXECUTE_HANDLER) { ; }
+
+		GlobalUnlock(hDib);
+		HANDLE hTemp = GlobalReAlloc(hDib, dwDibSizePacked, GMEM_MOVEABLE);
+		if (hTemp != NULL)
+			hDib = hTemp;
+
+		lpbi = (LPSTR)GlobalLock(hDib);
+		lpbih = (LPBITMAPV5HEADER)lpbi;
+		if (lpbi == NULL)
+			return FALSE;
 	}
 	else if (dwOffBits != 0 && dwOffBitsPacked > dwOffBits)
 	{ // Color table overlaps bitmap bits
