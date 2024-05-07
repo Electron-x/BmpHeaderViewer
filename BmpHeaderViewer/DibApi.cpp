@@ -679,7 +679,7 @@ HANDLE CreateClipboardDib(HANDLE hDib, UINT *puFormat)
 
 			// Update the v5 header with the new header size
 			((LPBITMAPV5HEADER)lpDest)->bV5Size = sizeof(BITMAPV5HEADER);
-
+			((LPBITMAPV5HEADER)lpDest)->bV5Intent = LCS_GM_IMAGES;
 			if (dwSrcHeaderSize == 52 || dwSrcHeaderSize == 56)
 				((LPBITMAPV5HEADER)lpDest)->bV5CSType = LCS_sRGB;
 		}
