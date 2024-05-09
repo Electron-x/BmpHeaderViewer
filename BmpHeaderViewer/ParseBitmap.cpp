@@ -35,18 +35,9 @@ float Half2Float(WORD h);
 
 BOOL ParseBitmap(HWND hDlg, HANDLE hFile, DWORD dwFileSize)
 {
-	BITMAPFILEHEADER bfh;
-	DWORD dwFileHeaderSize = sizeof(bfh);
-
 	if (hDlg == NULL || hFile == NULL)
 	{
 		SetLastError(ERROR_INVALID_PARAMETER);
-		return FALSE;
-	}
-
-	if (dwFileSize < dwFileHeaderSize)
-	{
-		SetLastError(ERROR_INVALID_DATA);
 		return FALSE;
 	}
 
@@ -57,6 +48,15 @@ BOOL ParseBitmap(HWND hDlg, HANDLE hFile, DWORD dwFileSize)
 	HWND hwndThumb = GetDlgItem(hDlg, IDC_THUMB);
 	if (hwndThumb == NULL)
 		return FALSE;
+
+	BITMAPFILEHEADER bfh;
+	DWORD dwFileHeaderSize = sizeof(bfh);
+
+	if (dwFileSize < dwFileHeaderSize)
+	{
+		OutputTextFromID(hwndEdit, IDS_CORRUPTED);
+		return FALSE;
+	}
 
 	// Jump to the beginning of the file
 	if (!FileSeekBegin(hFile, 0))
@@ -89,7 +89,7 @@ BOOL ParseBitmap(HWND hDlg, HANDLE hFile, DWORD dwFileSize)
 		dwFileHeaderSize += dwFileHeaderSize;
 		if (dwFileSize < dwFileHeaderSize)
 		{
-			SetLastError(ERROR_INVALID_DATA);
+			OutputTextFromID(hwndEdit, IDS_CORRUPTED);
 			return FALSE;
 		}
 
@@ -117,7 +117,7 @@ BOOL ParseBitmap(HWND hDlg, HANDLE hFile, DWORD dwFileSize)
 	DWORD dwDibSize = dwFileSize - dwFileHeaderSize;
 	if (dwDibSize < sizeof(BITMAPCOREHEADER))
 	{
-		SetLastError(ERROR_INVALID_DATA);
+		OutputTextFromID(hwndEdit, IDS_CORRUPTED);
 		return FALSE;
 	}
 
@@ -194,7 +194,7 @@ BOOL ParseDIBitmap(HWND hDlg, HANDLE hDib, DWORD dwOffBits)
 	if (dwDibHeaderSize > dwDibSize)
 	{
 		GlobalUnlock(hDib);
-		SetLastError(ERROR_INVALID_DATA);
+		OutputTextFromID(hwndEdit, IDS_CORRUPTED);
 		return FALSE;
 	}
 
@@ -213,7 +213,7 @@ BOOL ParseDIBitmap(HWND hDlg, HANDLE hDib, DWORD dwOffBits)
 
 		if (dwDibHeaderSize < 16)
 		{
-			SetLastError(ERROR_INVALID_DATA);
+			OutputTextFromID(hwndEdit, IDS_CORRUPTED);
 			return FALSE;
 		}
 
@@ -431,7 +431,7 @@ BOOL ParseDIBitmap(HWND hDlg, HANDLE hDib, DWORD dwOffBits)
 			if ((dwDibHeaderSize + ColorMasksSize(lpbi)) > dwDibSize)
 			{
 				GlobalUnlock(hDib);
-				SetLastError(ERROR_INVALID_DATA);
+				OutputTextFromID(hwndEdit, IDS_CORRUPTED);
 				return FALSE;
 			}
 
@@ -550,7 +550,7 @@ BOOL ParseDIBitmap(HWND hDlg, HANDLE hDib, DWORD dwOffBits)
 		if (DibBitsOffset(lpbi) > dwDibSize)
 		{
 			GlobalUnlock(hDib);
-			SetLastError(ERROR_INVALID_DATA);
+			OutputTextFromID(hwndEdit, IDS_CORRUPTED);
 			return FALSE;
 		}
 
@@ -624,7 +624,7 @@ BOOL ParseDIBitmap(HWND hDlg, HANDLE hDib, DWORD dwOffBits)
 	if ((dwOffBits != 0 ? dwOffBits : dwOffBitsPacked) > dwDibSize)
 	{
 		GlobalUnlock(hDib);
-		SetLastError(ERROR_INVALID_DATA);
+		OutputTextFromID(hwndEdit, IDS_CORRUPTED);
 		return FALSE;
 	}
 
@@ -705,6 +705,15 @@ BOOL ParseDIBitmap(HWND hDlg, HANDLE hDib, DWORD dwOffBits)
 		}
 	}
 
+	// Roughly check whether the bitmap is cropped. An existing color profile
+	// or possibly incorrectly set header data are not taken into account.
+	if (((dwOffBits != 0 ? dwOffBits : dwOffBitsPacked) + DibImageSize(lpbi)) > dwDibSize)
+	{
+		GlobalUnlock(hDib);
+		OutputTextFromID(hwndEdit, IDS_CORRUPTED);
+		return FALSE;
+	}
+
 	// Output the ICC profile data
 	if (DibHasColorProfile(lpbi))
 	{
@@ -713,7 +722,7 @@ BOOL ParseDIBitmap(HWND hDlg, HANDLE hDib, DWORD dwOffBits)
 		if ((lpbih->bV5ProfileData + lpbih->bV5ProfileSize) > dwDibSize)
 		{
 			GlobalUnlock(hDib);
-			SetLastError(ERROR_INVALID_DATA);
+			OutputTextFromID(hwndEdit, IDS_CORRUPTED);
 			return FALSE;
 		}
 
@@ -746,7 +755,7 @@ BOOL ParseDIBitmap(HWND hDlg, HANDLE hDib, DWORD dwOffBits)
 			if (lpbih->bV5ProfileSize < (sizeof(PROFILEV5HEADER) + sizeof(DWORD)))
 			{
 				GlobalUnlock(hDib);
-				SetLastError(ERROR_INVALID_DATA);
+				OutputTextFromID(hwndEdit, IDS_CORRUPTED);
 				return FALSE;
 			}
 
@@ -981,7 +990,7 @@ BOOL ParseDIBitmap(HWND hDlg, HANDLE hDib, DWORD dwOffBits)
 			if (lpbih->bV5ProfileSize < (sizeof(PROFILEV5HEADER) + sizeof(DWORD) + 3 * sizeof(DWORD) * dwTagCount))
 			{
 				GlobalUnlock(hDib);
-				SetLastError(ERROR_INVALID_DATA);
+				OutputTextFromID(hwndEdit, IDS_CORRUPTED);
 				return FALSE;
 			}
 
