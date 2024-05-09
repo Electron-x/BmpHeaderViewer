@@ -192,6 +192,7 @@ BEGIN
     IDS_BITMAPARRAY         "Bitmaps in multiple-version format are not supported.\r\n"
     IDS_ICON_POINTER        "Icons and pointers are not supported.\r\n"
     IDS_HEADERSIZE          "EXBMINFOHEADER DIBs or truncated BITMAPINFOHEADER2 DIBs are not supported.\r\n"
+    IDS_CORRUPTED           "Image corrupt or truncated.\r\n"
     IDP_WRITEFILE           "An error occurred while creating or writing the BMP or ICC file."
     IDP_PROOFING            "Proofing is not supported."
 END

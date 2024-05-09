@@ -18,8 +18,9 @@
 #define IDS_BITMAPARRAY                 408
 #define IDS_ICON_POINTER                409
 #define IDS_HEADERSIZE                  410
-#define IDP_WRITEFILE                   411
-#define IDP_PROOFING                    412
+#define IDS_CORRUPTED                   411
+#define IDP_WRITEFILE                   412
+#define IDP_PROOFING                    413
 #define IDC_OUTPUT                      1001
 #define IDC_OPEN                        1002
 #define IDC_COPY                        1003
