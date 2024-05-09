@@ -236,6 +236,8 @@ BOOL OutputTextFromID(HWND hwndEdit, UINT uID)
 	Edit_ReplaceSel(hwndEdit, g_szSepThin);
 	Edit_ReplaceSel(hwndEdit, szOutput);
 
+	SetLastError(ERROR_SUCCESS);
+
 	return TRUE;
 }
 
