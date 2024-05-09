@@ -636,17 +636,21 @@ BOOL ParseDIBitmap(HWND hDlg, HANDLE hDib, DWORD dwOffBits)
 		OutputTextFmt(hwndEdit, TEXT("Gap to pixels:\t%u bytes\r\n"), dwGap);
 
 		// Remove the gap to obtain a packed DIB
-		DWORD dwDibSizePacked = dwDibSize - dwGap;
+		dwDibSize -= dwGap;
+
+		LPSTR lpOld = lpbi + dwOffBits;
+		LPSTR lpNew = lpbi + dwOffBitsPacked;
 
 		__try
 		{
-			MoveMemory(lpbi + dwOffBitsPacked, lpbi + dwOffBits, dwDibSize - dwOffBits);
-			ZeroMemory(lpbi + dwDibSizePacked, dwGap);
+			dwOffBits = dwOffBitsPacked;
+			MoveMemory(lpNew, lpOld, dwDibSize - dwOffBits);
+			ZeroMemory(lpbi + dwDibSize, dwGap);
 		}
 		__except (EXCEPTION_EXECUTE_HANDLER) { ; }
 
 		GlobalUnlock(hDib);
-		HANDLE hTemp = GlobalReAlloc(hDib, dwDibSizePacked, GMEM_MOVEABLE);
+		HANDLE hTemp = GlobalReAlloc(hDib, dwDibSize, GMEM_MOVEABLE);
 		if (hTemp != NULL)
 			hDib = hTemp;
 
