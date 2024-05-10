@@ -49,9 +49,11 @@
 
 // C RunTime Header Files
 #include <tchar.h>
+#include <setjmp.h>
 
 // TODO: reference additional headers your program requires here
 #include "BmpHeaderViewer.h"
 #include "ParseBitmap.h"
+#include "JpegToDib.h"
 #include "DibApi.h"
 #include "Misc.h"
