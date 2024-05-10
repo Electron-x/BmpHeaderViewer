@@ -1,2 +1,3 @@
-# Vendoring BMP Suite files
+# Vendoring bmpsuite and libjpeg files
 bmpsuite/** linguist-vendored
+libjpeg/* linguist-vendored
