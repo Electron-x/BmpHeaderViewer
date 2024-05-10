@@ -182,7 +182,7 @@ IDB_HEADERVIEWER        BITMAP                  "BmpHeaderViewer.bmp"
 STRINGTABLE
 BEGIN
     IDS_FONTSIZEINFO        "\r\nThe font can be scaled with Ctrl + Mouse scroll wheel.\r\nHolding down the Shift key during startup will load the default settings.\r\n"
-    IDS_FILTER_BMP_OPEN     "Windows Bitmap (*.bmp;*.dib;*.rle;*.2bp)|*.bmp;*.dib;*.rle;*.2bp|All Files (*.*)|*.*||"
+    IDS_FILTER_BMP_OPEN     "Windows Bitmap (*.bmp;*.dib;*.rle;*.2bp)|*.bmp;*.dib;*.rle;*.2bp|JPEG (*.jpg;*.jpeg)|*.jpg;*.jpeg|All Files (*.*)|*.*||"
     IDS_FILTER_BMP_SAVE     "Windows Bitmap (*.bmp)|*.bmp||"
     IDS_FILTER_ICC_SAVE     "Windows Bitmap (*.bmp)|*.bmp|ICC Color Profile (*.icc)|*.icc||"
     IDS_UNNAMED             "Unnamed.bmp"
