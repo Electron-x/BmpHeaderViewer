@@ -71,6 +71,8 @@ LRESULT CALLBACK OutputWndProc(HWND, UINT, WPARAM, LPARAM);
 
 // Opens and parses the passed file and outputs the result
 BOOL ParseFile(HWND hDlg, LPCTSTR lpszFileName);
+// Decompresses a JPEG image and displays it as thumbnail
+BOOL ReadJpeg(HWND hDlg, HANDLE hFile, DWORD dwFileSize);
 // Displays a hex dump of the first 1024 bytes of a file
 BOOL HexDump(HWND hwndEdit, HANDLE hFile, SIZE_T cbLen);
 
@@ -240,6 +242,7 @@ INT_PTR CALLBACK HeaderViewerDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPA
 	static HFONT    s_hfontDlgCurr = NULL;
 	static HFONT    s_hfontEditBox = NULL;
 	static HWND     s_hwndSizeBox = NULL;
+	static DWORD    s_dwFilterIndex = 1;
 	static TCHAR    s_szFileName[MY_OFN_MAX_PATH];
 
 	switch (message)
@@ -531,8 +534,7 @@ INT_PTR CALLBACK HeaderViewerDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPA
 
 				case IDC_OPEN:
 				{
-					DWORD dwFilterIndex = 1;
-					if (GetFileName(hDlg, s_szFileName, _countof(s_szFileName), &dwFilterIndex))
+					if (GetFileName(hDlg, s_szFileName, _countof(s_szFileName), &s_dwFilterIndex))
 					{
 						HCURSOR hOldCursor = SetCursor(LoadCursor(NULL, IDC_WAIT));
 						HWND hwndEdit = GetDlgItem(hDlg, IDC_OUTPUT);
@@ -1260,6 +1262,10 @@ BOOL ParseFile(HWND hDlg, LPCTSTR lpszFileName)
 				OutputErrorMessage(hwndEdit, dwError);
 		}
 	}
+	else if (achMagic[0] == 0xFF && achMagic[1] == 0xD8)
+	{ // JPEG
+		bSuccess = ReadJpeg(hDlg, hFile, wfad.nFileSizeLow);
+	}
 	else
 	{ // Unsupported file format
 		OutputTextFromID(hwndEdit, IDS_MAGIC);
@@ -1270,6 +1276,57 @@ BOOL ParseFile(HWND hDlg, LPCTSTR lpszFileName)
 	CloseHandle(hFile);
 
 	return bSuccess;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////
+
+BOOL ReadJpeg(HWND hDlg, HANDLE hFile, DWORD dwFileSize)
+{
+	if (hDlg == NULL || hFile == NULL || dwFileSize == 0)
+		return FALSE;
+
+	HWND hwndEdit = GetDlgItem(hDlg, IDC_OUTPUT);
+	if (hwndEdit == NULL)
+		return FALSE;
+
+	HWND hwndThumb = GetDlgItem(hDlg, IDC_THUMB);
+	if (hwndThumb == NULL)
+		return FALSE;
+
+	// Jump to the beginning of the file
+	if (!FileSeekBegin(hFile, 0))
+		return FALSE;
+
+	LPVOID lpData = MyGlobalAllocPtr(GHND, dwFileSize);
+	if (lpData == NULL)
+		return FALSE;
+
+	// Read the file
+	if (!MyReadFile(hFile, lpData, dwFileSize))
+	{
+		MyGlobalFreePtr(lpData);
+		return FALSE;
+	}
+
+	OutputText(hwndEdit, g_szSepThin);
+
+	HANDLE hDib = NULL;
+	HCURSOR hOldCursor = SetCursor(LoadCursor(NULL, IDC_WAIT));
+
+	// Decode the JPEG image
+	__try { hDib = JpegToDib(lpData, dwFileSize, 1); }
+	__except (EXCEPTION_EXECUTE_HANDLER) { hDib = NULL; }
+
+	SetCursor(hOldCursor);
+
+	if (hDib != NULL)
+		ReplaceThumbnail(hwndThumb, hDib);
+	else
+		SetThumbnailText(hwndThumb, IDS_UNSUPPORTED);
+
+	MyGlobalFreePtr(lpData);
+
+	return TRUE;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////
