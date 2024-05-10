@@ -115,7 +115,7 @@
       <SDLCheck>true</SDLCheck>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>ComCtl32.Lib;MSImg32.Lib;Vfw32.Lib;UxTheme.lib;Dwmapi.lib;Icmui.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>ComCtl32.Lib;MSImg32.Lib;Vfw32.Lib;UxTheme.lib;Dwmapi.lib;Icmui.lib;$(OutDir)libjpeg.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <OutputFile>$(OutDir)$(ProjectName).exe</OutputFile>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <SubSystem>Windows</SubSystem>
@@ -145,7 +145,7 @@
       <SDLCheck>true</SDLCheck>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>ComCtl32.Lib;MSImg32.Lib;Vfw32.Lib;UxTheme.lib;Dwmapi.lib;Icmui.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>ComCtl32.Lib;MSImg32.Lib;Vfw32.Lib;UxTheme.lib;Dwmapi.lib;Icmui.lib;$(OutDir)libjpeg.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <OutputFile>$(OutDir)$(ProjectName)64.exe</OutputFile>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <SubSystem>Windows</SubSystem>
@@ -174,7 +174,7 @@
     </ClCompile>
     <Link>
       <AdditionalOptions>/PDBALTPATH:%_PDB% %(AdditionalOptions)</AdditionalOptions>
-      <AdditionalDependencies>ComCtl32.Lib;MSImg32.Lib;Vfw32.Lib;UxTheme.lib;Dwmapi.lib;Icmui.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>ComCtl32.Lib;MSImg32.Lib;Vfw32.Lib;UxTheme.lib;Dwmapi.lib;Icmui.lib;$(OutDir)libjpeg.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <OutputFile>$(OutDir)$(ProjectName).exe</OutputFile>
       <IgnoreAllDefaultLibraries>false</IgnoreAllDefaultLibraries>
       <GenerateDebugInformation>false</GenerateDebugInformation>
@@ -209,7 +209,7 @@
       <OmitFramePointers>true</OmitFramePointers>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>ComCtl32.Lib;MSImg32.Lib;Vfw32.Lib;UxTheme.lib;Dwmapi.lib;Icmui.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>ComCtl32.Lib;MSImg32.Lib;Vfw32.Lib;UxTheme.lib;Dwmapi.lib;Icmui.lib;$(OutDir)libjpeg.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <OutputFile>$(OutDir)$(ProjectName)64.exe</OutputFile>
       <GenerateDebugInformation>false</GenerateDebugInformation>
       <SubSystem>Windows</SubSystem>
@@ -224,6 +224,7 @@
     </Manifest>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="JpegToDib.cpp" />
     <ClCompile Include="ParseBitmap.cpp" />
     <ClCompile Include="DibApi.cpp" />
     <ClCompile Include="BmpHeaderViewer.cpp" />
@@ -236,6 +237,7 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="JpegToDib.h" />
     <ClInclude Include="ParseBitmap.h" />
     <ClInclude Include="DibApi.h" />
     <ClInclude Include="BmpHeaderViewer.h" />

@@ -14,6 +14,11 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "BmpHeaderViewer", "BmpHeaderViewer\BmpHeaderViewer.vcxproj", "{82C3901E-B3C0-414A-850C-A7460A86A759}"
+	ProjectSection(ProjectDependencies) = postProject
+		{7BABB96F-3AC9-4F1C-9ADB-9FD0AA550C59} = {7BABB96F-3AC9-4F1C-9ADB-9FD0AA550C59}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "libjpeg", "libjpeg\libjpeg.vcxproj", "{7BABB96F-3AC9-4F1C-9ADB-9FD0AA550C59}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -31,6 +36,14 @@ Global
 		{82C3901E-B3C0-414A-850C-A7460A86A759}.Release|x64.Build.0 = Release|x64
 		{82C3901E-B3C0-414A-850C-A7460A86A759}.Release|x86.ActiveCfg = Release|Win32
 		{82C3901E-B3C0-414A-850C-A7460A86A759}.Release|x86.Build.0 = Release|Win32
+		{7BABB96F-3AC9-4F1C-9ADB-9FD0AA550C59}.Debug|x64.ActiveCfg = Debug|x64
+		{7BABB96F-3AC9-4F1C-9ADB-9FD0AA550C59}.Debug|x64.Build.0 = Debug|x64
+		{7BABB96F-3AC9-4F1C-9ADB-9FD0AA550C59}.Debug|x86.ActiveCfg = Debug|Win32
+		{7BABB96F-3AC9-4F1C-9ADB-9FD0AA550C59}.Debug|x86.Build.0 = Debug|Win32
+		{7BABB96F-3AC9-4F1C-9ADB-9FD0AA550C59}.Release|x64.ActiveCfg = Release|x64
+		{7BABB96F-3AC9-4F1C-9ADB-9FD0AA550C59}.Release|x64.Build.0 = Release|x64
+		{7BABB96F-3AC9-4F1C-9ADB-9FD0AA550C59}.Release|x86.ActiveCfg = Release|Win32
+		{7BABB96F-3AC9-4F1C-9ADB-9FD0AA550C59}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
