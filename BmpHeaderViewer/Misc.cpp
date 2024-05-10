@@ -136,10 +136,10 @@ void ReplaceThumbnail(HWND hwndThumb, HANDLE hDib)
 		LPCSTR lpbi = (LPCSTR)GlobalLock(hDib);
 		if (lpbi != NULL)
 		{
-			// For performance reasons, enable ICM inside DC only if the
-			// DIB contains color space data and no transparent pixels
+			// For performance reasons, enable ICM inside DC
+			// only if the DIB contains color space data
 			g_nIcmMode = ICM_OFF;
-			if (g_hBitmapThumb == NULL && DibHasColorSpaceData(lpbi))
+			if (DibHasColorSpaceData(lpbi))
 				g_nIcmMode = ICM_ON;
 
 			GlobalUnlock(hDib);
