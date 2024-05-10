@@ -38,7 +38,10 @@
 #define IS_WIN40_DIB(lpbi)  ((*(LPDWORD)(lpbi)) == sizeof(BITMAPV4HEADER))
 #define IS_WIN50_DIB(lpbi)  ((*(LPDWORD)(lpbi)) == sizeof(BITMAPV5HEADER))
 
-////////////////////////////////////////////////////////////////////////////////////////////////
+// Incorporating rounding, Mul8Bit is an approximation of a * b / 255 for values in the
+// range [0...255]. For details, see the documentation of the DrvAlphaBlend function.
+__inline int Mul8Bit(int a, int b)
+{ int t = a * b + 128; return (t + (t >> 8)) >> 8; }
 
 // Saves a DIB as a Windows Bitmap file
 BOOL SaveBitmap(LPCTSTR lpszFileName, HANDLE hDib);

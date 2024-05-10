@@ -21,10 +21,6 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////
 // Forward declarations of functions included in this code module
 
-// Incorporating rounding, Mul8Bit is an approximation of a * b / 255 for values in the
-// range [0...255]. For details, see the documentation of the DrvAlphaBlend function.
-int Mul8Bit(int a, int b);
-
 // Determines the value of a color component using a color mask
 BYTE GetColorValue(DWORD dwPixel, DWORD dwMask);
 
@@ -1040,14 +1036,6 @@ DWORD QueryDibSupport(LPCSTR lpbi)
 	ReleaseDC(NULL, hdc);
 
 	return dwFlags;
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////
-
-static __inline int Mul8Bit(int a, int b)
-{
-	int t = a * b + 128;
-	return (t + (t >> 8)) >> 8;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////
