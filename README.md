@@ -356,7 +356,9 @@ A BMP file can be opened in various ways:
 An open bitmap can be copied to the clipboard via the context menu of the thumbnail.  
 A memory bitmap can be pasted from the clipboard via the context menu of the application window.
 
-For performance reasons, color management is only activated if the bitmap contains color space data and no transparent pixels. But you can use the context menu of the thumbnail to activate or deactivate color matching for this specific image.
+For performance reasons, color management is only activated if the bitmap contains color space data. Color management and transparency are mutually exclusive. You can use the context menu of the thumbnail to activate or deactivate color matching for this specific image.
+
+The program can also open JPEG files. This gives you more options for experimenting with color profiles.
 
 The font of the output window can be scaled with <kbd>CTRL</kbd>+<kbd>MOUSE SCROLL WHEEL</kbd>.
 
@@ -390,6 +392,8 @@ There are no special prerequisites or dependencies.
 Copyright © 2024 by W. Rolke
 
 Licensed under the [European Union Public Licence (EUPL)](https://joinup.ec.europa.eu/software/page/eupl), Version 1.2 - see the [LICENSE.txt](LICENSE.txt) file for details.
+
+This software is based in part on the work of the Independent JPEG Group.
 
 The image files in the bmpsuite folder are in the public domain.
 
