@@ -10,7 +10,7 @@ The author, Jason Summers, also provides a [description of each image](https://e
 
 ## Additional Images
 
-The BMP Suite is a great collection. However, some variants are missing. Therefore, the following files have been added using a modified bmpsuite.c:
+The BMP Suite is a great collection. However, some useful variants are missing (especially for Windows developers). Therefore, the following files have been added using a modified bmpsuite.c:
 
 `x/msvideo1.bmp`
 `x/cinepak.bmp`
@@ -28,6 +28,16 @@ This combination is not specified, but could be useful for testing.
 
 This is a bitmap with bfOffBits = 0 set in the file header.
 In early Software Development Kit (SDK) samples, packed bitmap files were marked this way.
+
+`b/nopalette.bmp`
+
+The required color table is missing in this file. This case is tricky because a biClrUsed value of 0 indicates a complete color table.
+In the case of a packed memory DIB, it is no longer possible to determine the start of the bitmap bits.
+
+`q/pal8os2offs.bmp`
+
+Like pal8offs.bmp, this file has a gap between the color table and the bitmap bits.
+However, you cannot simply create a packed DIB from this OS/2 variant by adjusting biClrUsed.
 
 `q/rgb16os2.bmp`
 `q/rgb32os2.bmp`
