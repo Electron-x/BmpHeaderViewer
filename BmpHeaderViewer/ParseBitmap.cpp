@@ -669,7 +669,15 @@ BOOL ParseDIBitmap(HWND hDlg, HANDLE hDib, DWORD dwOffBits)
 		DWORD dwNumEntries = DibNumColors(lpbi);
 		if (dwNumEntries > 0)
 		{
-			if (dwDibHeaderSize == sizeof(BITMAPCOREHEADER))
+			DWORD dwOverlappedEntries = dwOverlap / sizeof(RGBQUAD);
+
+			if (dwDibHeaderSize >= sizeof(BITMAPINFOHEADER) && dwNumEntries > dwOverlappedEntries)
+			{ // Adjust the number of color table entries
+				lpbih->bV5ClrUsed = dwNumEntries - dwOverlappedEntries;
+				if (lpbih->bV5ClrImportant > lpbih->bV5ClrUsed)
+					lpbih->bV5ClrImportant = lpbih->bV5ClrUsed;
+			}
+			else
 			{ // Add the missing color table entries to the DIB
 				dwDibSize += dwOverlap;
 
@@ -694,13 +702,6 @@ BOOL ParseDIBitmap(HWND hDlg, HANDLE hDib, DWORD dwOffBits)
 					ZeroMemory(lpOld, dwOverlap);
 				}
 				__except (EXCEPTION_EXECUTE_HANDLER) { ; }
-			}
-			else
-			{ // Adjust the number of color table entries
-				DWORD dwAddEntries = dwOverlap / sizeof(RGBQUAD);
-
-				if (dwNumEntries > dwAddEntries)
-					lpbih->bV5ClrUsed = dwNumEntries - dwAddEntries;
 			}
 		}
 	}
