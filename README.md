@@ -368,7 +368,7 @@ The application saves the window placement and font size in the registry. Holdin
 
 DIBs with extended BITMAPINFOHEADER fields, as described in the JPEG DIB Format Specification, are not supported.
 
-Bitmaps in multiple-version format and truncated OS/2 2.0-style DIBs, as described in the Presentation Manager Programming Reference, are not supported.
+Multiple-version format bitmaps and OS/2 2.0-style DIBs with a truncated header, as described in the Presentation Manager Programming Reference, are not supported.
 
 Only the header and the tag table of an embedded color profile are displayed. However, the profile can be exported for further examination, e.g. with the [ICC Profile Inspector](https://www.color.org/profileinspector.xalter) or using [iccDumpProfile](https://github.com/InternationalColorConsortium/DemoIccMAX).
 
