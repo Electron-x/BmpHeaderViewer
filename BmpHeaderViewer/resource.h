@@ -1,6 +1,6 @@
 //{{NO_DEPENDENCIES}}
-// Von Microsoft Visual C++ generierte Includedatei.
-// Verwendet durch BmpHeaderViewer.rc
+// Microsoft Visual C++ generated include file.
+// Used by BmpHeaderViewer.rc
 //
 #define IDI_HEADERVIEWER                101
 #define IDB_HEADERVIEWER                102
