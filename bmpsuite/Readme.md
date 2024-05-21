@@ -10,7 +10,8 @@ The author, Jason Summers, also provides a [description of each image](https://e
 
 ## Additional Images
 
-The BMP Suite is a great collection. However, some useful variants are missing (especially for Windows developers). Therefore, the following files have been added using a modified bmpsuite.c:
+The BMP Suite is a great collection. However, some useful variants are missing (especially for Windows developers).
+Therefore, the following additional images were created with a [modified](https://github.com/Electron-x/bmpsuite) bmpsuite.c:
 
 `x/msvideo1.bmp`
 `x/cinepak.bmp`
