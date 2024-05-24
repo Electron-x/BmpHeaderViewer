@@ -620,7 +620,7 @@ HANDLE CreateClipboardDib(HANDLE hDib, UINT *puFormat)
 	}
 	else if (dwSrcHeaderSize == 64)
 	{
-		// Create a new DIBv3 from an uncompressed OS/2 2.0 DIB
+		// Create a new DIBv3 from an OS/2 2.0 DIB
 		hNewDib = GlobalAlloc(GMEM_MOVEABLE | GMEM_DDESHARE,
 			cbLen + sizeof(BITMAPINFOHEADER) - dwSrcHeaderSize);
 		if (hNewDib == NULL)
@@ -907,7 +907,9 @@ UINT DibImageSize(LPCSTR lpbi)
 
 	LPBITMAPINFOHEADER lpbih = (LPBITMAPINFOHEADER)lpbi;
 
-	if (lpbih->biSizeImage != 0)
+	// Use biSizeImage only for compressed bitmaps
+	if (lpbih->biSizeImage != 0 && lpbih->biCompression != BI_RGB &&
+		lpbih->biCompression != BI_BITFIELDS && lpbih->biCompression != BI_ALPHABITFIELDS)
 		return lpbih->biSizeImage;
 
 	return WIDTHBYTES(abs(lpbih->biWidth) * lpbih->biPlanes * lpbih->biBitCount) * abs(lpbih->biHeight);
