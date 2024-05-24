@@ -903,22 +903,7 @@ INT_PTR CALLBACK HeaderViewerDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPA
 				}
 				else if (hwndSender == hwndThumb)
 				{
-					if (g_hDibThumb != NULL)
-					{
-						LPBITMAPINFOHEADER lpbi = (LPBITMAPINFOHEADER)GlobalLock(g_hDibThumb);
-
-						if (lpbi == NULL || (lpbi->biSize >= sizeof(BITMAPINFOHEADER) &&
-							lpbi->biCompression != BI_RGB && lpbi->biCompression != BI_RLE4 &&
-							lpbi->biCompression != BI_RLE8 && lpbi->biCompression != BI_BITFIELDS))
-							EnableMenuItem(hmenuTrackPopup, IDC_THUMB_COPY, MF_BYCOMMAND | MF_GRAYED);
-
-						if (lpbi == NULL)
-							EnableMenuItem(hmenuTrackPopup, IDC_THUMB_SAVE, MF_BYCOMMAND | MF_GRAYED);
-
-						if (lpbi != NULL)
-							GlobalUnlock(g_hDibThumb);
-					}
-					else
+					if (g_hDibThumb == NULL)
 					{
 						EnableMenuItem(hmenuTrackPopup, IDC_THUMB_COPY, MF_BYCOMMAND | MF_GRAYED);
 						EnableMenuItem(hmenuTrackPopup, IDC_THUMB_SAVE, MF_BYCOMMAND | MF_GRAYED);
