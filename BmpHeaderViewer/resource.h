@@ -21,6 +21,7 @@
 #define IDS_CORRUPTED                   411
 #define IDP_WRITEFILE                   412
 #define IDP_PROOFING                    413
+#define IDP_CLIPBOARD                   414
 #define IDC_OUTPUT                      1001
 #define IDC_OPEN                        1002
 #define IDC_COPY                        1003

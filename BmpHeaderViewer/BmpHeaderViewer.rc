@@ -195,6 +195,7 @@ BEGIN
     IDS_CORRUPTED           "Image corrupt or truncated.\r\n"
     IDP_WRITEFILE           "An error occurred while creating or writing the BMP or ICC file."
     IDP_PROOFING            "Proofing is not supported."
+    IDP_CLIPBOARD           "The information on the Clipboard can't be inserted into this application."
 END
 
 #endif    // English (Neutral) resources

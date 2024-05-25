@@ -642,8 +642,11 @@ INT_PTR CALLBACK HeaderViewerDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPA
 
 						HANDLE hDib = GetClipboardData(uFormat);
 						if (hDib == NULL)
-						{
+						{ // You cannot paste a DIB section from another application
 							CloseClipboard();
+							TCHAR szText[512];
+							if (LoadString(g_hInstance, IDP_CLIPBOARD, szText, _countof(szText)) > 0)
+								MessageBox(hDlg, szText, g_szTitle, MB_OK | MB_ICONEXCLAMATION);
 							return FALSE;
 						}
 
