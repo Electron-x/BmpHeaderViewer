@@ -907,9 +907,7 @@ UINT DibImageSize(LPCSTR lpbi)
 
 	LPBITMAPINFOHEADER lpbih = (LPBITMAPINFOHEADER)lpbi;
 
-	// Use biSizeImage only for compressed bitmaps
-	if (lpbih->biSizeImage != 0 && lpbih->biCompression != BI_RGB &&
-		lpbih->biCompression != BI_BITFIELDS && lpbih->biCompression != BI_ALPHABITFIELDS)
+	if (lpbih->biSizeImage != 0)
 		return lpbih->biSizeImage;
 
 	return WIDTHBYTES(abs(lpbih->biWidth) * lpbih->biPlanes * lpbih->biBitCount) * abs(lpbih->biHeight);
