@@ -706,14 +706,11 @@ BOOL ParseDIBitmap(HWND hDlg, HANDLE hDib, DWORD dwOffBits)
 		}
 	}
 
-	// Roughly check whether the bitmap is cropped. An existing color profile
-	// or possibly incorrectly set header data are not taken into account.
+	// Check whether the bitmap is cropped. An existing color profile or incorrectly
+	// set header data are not taken into account. As this is a worst-case check and
+	// the error can usually be caught, only a message is displayed.
 	if (((dwOffBits != 0 ? dwOffBits : dwOffBitsPacked) + DibImageSize(lpbi)) > dwDibSize)
-	{
-		GlobalUnlock(hDib);
 		OutputTextFromID(hwndEdit, IDS_CORRUPTED);
-		return FALSE;
-	}
 
 	// Output the ICC profile data
 	if (DibHasColorProfile(lpbi))
