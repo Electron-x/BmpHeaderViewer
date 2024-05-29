@@ -253,8 +253,10 @@ BOOL ParseDIBitmap(HWND hDlg, HANDLE hDib, DWORD dwOffBits)
 		// driver can draw this DIB. The Escape doesn't support core DIBs.
 		bIsDibDisplayable = IsDibSupported(lpbi);
 		// Perform some additional sanity checks
-		INT64 llBitsSize = WIDTHBYTES((INT64)lpbih->bV5Width * lpbih->bV5Planes * lpbih->bV5BitCount) * abs(lpbih->bV5Height);
-		if (llBitsSize <= 0 || llBitsSize > 0x80000000L)
+		if (lpbih->bV5Width < 0)
+			lpbih->bV5Width = -lpbih->bV5Width;
+		UINT64 ullBitsSize = WIDTHBYTES((INT64)lpbih->bV5Width * lpbih->bV5Planes * lpbih->bV5BitCount) * abs(lpbih->bV5Height);
+		if ((lpbih->bV5BitCount && ullBitsSize == 0) || ullBitsSize > 0x80000000L)
 			bIsDibDisplayable = FALSE;
 
 		//lpbih->bV5Compression &= ~BI_SRCPREROTATE;
@@ -339,7 +341,13 @@ BOOL ParseDIBitmap(HWND hDlg, HANDLE hDib, DWORD dwOffBits)
 		}
 		OutputText(hwndEdit, TEXT("\r\n"));
 
-		OutputTextFmt(hwndEdit, TEXT("SizeImage:\t%u bytes\r\n"), lpbih->bV5SizeImage);
+		OutputTextFmt(hwndEdit, TEXT("SizeImage:\t%u bytes"), lpbih->bV5SizeImage);
+		if (lpbih->bV5SizeImage && ullBitsSize && ullBitsSize <= 0xFFFFFFFF &&
+			((UINT64)lpbih->bV5SizeImage - ullBitsSize) != 0 &&
+			(lpbih->bV5Compression == BI_RGB || lpbih->bV5Compression == BI_BITFIELDS ||
+			lpbih->bV5Compression == BI_ALPHABITFIELDS || lpbih->bV5Compression == BI_CMYK))
+			OutputTextFmt(hwndEdit, TEXT(" (%+lld bytes)"), (UINT64)lpbih->bV5SizeImage - ullBitsSize);
+		OutputText(hwndEdit, TEXT("\r\n"));
 
 		OutputTextFmt(hwndEdit, TEXT("XPelsPerMeter:\t%d"), lpbih->bV5XPelsPerMeter);
 		if (lpbih->bV5XPelsPerMeter >= 20)
