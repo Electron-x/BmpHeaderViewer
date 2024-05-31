@@ -545,6 +545,7 @@ BOOL ColorMatchUI(HWND hDlg)
 	cms.dwSize = sizeof(COLORMATCHSETUP);
 	cms.dwVersion = COLOR_MATCH_VERSION;
 	cms.hwndOwner = hDlg;
+
 	cms.lpfnApplyCallback = ColorSetupApply;
 
 	cms.pMonitorProfile  = szMonitorProfile;
@@ -558,6 +559,8 @@ BOOL ColorMatchUI(HWND hDlg)
 	if (g_nIcmMode != ICM_ON)
 		cms.dwFlags |= CMS_DISABLEICM;
 
+	// Determine the source profile and set its description
+	// if it's not the Windows default color profile (sRGB)
 	if (g_hDibThumb != NULL)
 	{
 		LPBITMAPV5HEADER lpbiv5 = (LPBITMAPV5HEADER)GlobalLock(g_hDibThumb);
@@ -584,8 +587,40 @@ BOOL ColorMatchUI(HWND hDlg)
 		}
 	}
 
-	SetLastError(ERROR_SUCCESS);
+	MONITORINFOEX mi;
+	ZeroMemory(&mi, sizeof(mi));
+	mi.cbSize = sizeof(mi);
+
+	DISPLAY_DEVICE dd;
+	ZeroMemory(&dd, sizeof(dd));
+	dd.cb = sizeof(dd);
+
+	HWND hwndThumb = GetDlgItem(hDlg, IDC_THUMB);
+	if (hwndThumb == NULL)
+		hwndThumb = hDlg;
+
+	// Determine the device ID of the monitor on which the thumbnail is displayed
+	HMONITOR hMonitor = MonitorFromWindow(hwndThumb, MONITOR_DEFAULTTONEAREST);
+	if (hMonitor != NULL)
+	{
+		if (GetMonitorInfo(hMonitor, &mi))
+		{
+			int i = 0;
+			while (EnumDisplayDevices(mi.szDevice, i++, &dd, 0))
+			{
+				if (dd.StateFlags & DISPLAY_DEVICE_ACTIVE &&
+					dd.StateFlags & DISPLAY_DEVICE_ATTACHED)
+					break;
+			}
+		}
+	}
+
+	// Contrary to what the name and documentation
+	// suggest, this element expects a device ID
+	cms.pDisplayName = dd.DeviceID;
+
 	// Create the Color Management dialog box
+	SetLastError(ERROR_SUCCESS);
 	BOOL bSuccess = SetupColorMatching(&cms);
 	if (!bSuccess)
 		return (GetLastError() == ERROR_SUCCESS) ? TRUE : FALSE;
