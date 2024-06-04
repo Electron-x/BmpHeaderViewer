@@ -77,6 +77,28 @@ BOOL IsKeyDown(int nVirtKey)
 
 ////////////////////////////////////////////////////////////////////////////////////////////////
 
+BOOL EnableButton(HWND hDlg, int nIDButton, int nIDFocus, BOOL bEnable)
+{
+	HWND hwndButton = GetDlgItem(hDlg, nIDButton);
+	if (hwndButton == NULL)
+		return FALSE;
+
+	BOOL bIsEnabled = IsWindowEnabled(hwndButton);
+	if ((bIsEnabled && bEnable) || (!bIsEnabled && !bEnable))
+		return TRUE;
+
+	if (!bEnable && nIDFocus)
+	{
+		HWND hwndFocus = GetDlgItem(hDlg, nIDFocus);
+		if (GetFocus() == hwndButton)
+			SendMessage(hDlg, WM_NEXTDLGCTL, (WPARAM)hwndFocus, hwndFocus != NULL);
+	}
+
+	return Button_Enable(hwndButton, bEnable);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////
+
 void SetThumbnailText(HWND hwndThumb, UINT uID)
 {
 	if (hwndThumb == NULL)
@@ -535,6 +557,9 @@ static BOOL WINAPI ColorSetupApply(PCOLORMATCHSETUP pcms, LPARAM lParam)
 
 ////////////////////////////////////////////////////////////////////////////////////////////////
 
+// SetupColorMatching is deprecated as of Windows Vista
+#pragma warning(disable:4995)	// C4995: function marked as deprecated
+
 BOOL ColorMatchUI(HWND hDlg)
 {
 	TCHAR szMonitorProfile[MAX_PATH + 1] = { 0 };
@@ -623,7 +648,12 @@ BOOL ColorMatchUI(HWND hDlg)
 	SetLastError(ERROR_SUCCESS);
 	BOOL bSuccess = SetupColorMatching(&cms);
 	if (!bSuccess)
-		return (GetLastError() == ERROR_SUCCESS) ? TRUE : FALSE;
+	{
+		DWORD dwError = GetLastError();
+		if (dwError == ERROR_NOT_SUPPORTED)
+			MessageBeep(MB_ICONEXCLAMATION);
+		return (dwError == ERROR_SUCCESS) ? TRUE : FALSE;
+	}
 
 	ApplyColorSettings(&cms);
 

@@ -50,6 +50,9 @@ LPWSTR MyStrNCpyW(LPWSTR lpString1, LPCWSTR lpString2, int iMaxLength);
 // Determines whether the specified key was down at the time the input message was generated
 BOOL IsKeyDown(int nVirtKey);
 
+// Enables or disables a button control and sets the keyboard focus to the specified control if needed
+BOOL EnableButton(HWND hDlg, int nIDButton, int nIDFocus = 0, BOOL bEnable = TRUE);
+
 // Sets the title of the thumbnail
 void SetThumbnailText(HWND hwndThumb, UINT uID = 0);
 
