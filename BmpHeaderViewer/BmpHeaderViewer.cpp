@@ -21,7 +21,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////
 // Global Variables
 
-#define VERSION TEXT("1.0")
+#define VERSION TEXT("1.1")
 #if defined(_WIN64)
 #define PLATFORM TEXT("64-bit")
 #else
