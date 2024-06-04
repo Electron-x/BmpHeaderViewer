@@ -351,10 +351,7 @@ A BMP file can be opened in various ways:
 - As a command line argument
 - Via the Open File dialog box
 - Via drag-and-drop
-- Via the clipboard (per context menu of the application window or per <kbd>CTRL</kbd>+<kbd>V</kbd> in the output window)
-
-An open bitmap can be copied to the clipboard via the context menu of the thumbnail.  
-A memory bitmap can be pasted from the clipboard via the context menu of the application window.
+- Via the clipboard
 
 For performance reasons, color management is only activated if the bitmap contains color space data. Color management and transparency are mutually exclusive. You can use the context menu of the thumbnail to activate or deactivate color matching for this specific image.
 
