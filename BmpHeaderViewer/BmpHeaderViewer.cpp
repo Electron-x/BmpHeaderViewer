@@ -236,6 +236,7 @@ INT_PTR CALLBACK HeaderViewerDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPA
 {
 	static int      s_nDpi = USER_DEFAULT_SCREEN_DPI;
 	static POINT    s_ptMinTrackSize = { 0 };
+	static BOOL     s_IsListener = FALSE;
 	static BOOL     s_bWordWrap = FALSE;
 	static HBRUSH   s_hbrBkgnd = NULL;
 	static HFONT    s_hfontDlgOrig = NULL;
@@ -484,6 +485,15 @@ INT_PTR CALLBACK HeaderViewerDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPA
 			return FALSE;
 		}
 
+		case WM_CLIPBOARDUPDATE:
+		{
+			EnableButton(hDlg, IDC_PASTE, IDC_OPEN,
+				IsClipboardFormatAvailable(CF_DIB) ||
+				IsClipboardFormatAvailable(CF_DIBV5) ||
+				IsClipboardFormatAvailable(CF_HDROP));
+			return FALSE;
+		}
+
 		case WM_COMMAND:
 			switch (LOWORD(wParam))
 			{
@@ -491,6 +501,9 @@ INT_PTR CALLBACK HeaderViewerDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPA
 				case IDCANCEL:
 				{
 					SaveSettings(hDlg, s_hfontEditBox);
+
+					if (s_IsListener)
+						s_IsListener = !RemoveClipboardFormatListener(hDlg);
 
 					DeleteWindowRect(hDlg);
 					HWND hwndChild = GetWindow(hDlg, GW_CHILD);
@@ -679,7 +692,9 @@ INT_PTR CALLBACK HeaderViewerDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPA
 
 						SetLastError(ERROR_SUCCESS);
 						BOOL bSuccess = ParseDIBitmap(hDlg, hNewDib);
-						if (!bSuccess)
+						if (bSuccess)
+							ReplaceThumbnail(GetDlgItem(hDlg, IDC_THUMB), hNewDib);
+						else
 						{
 							DWORD dwError = GetLastError();
 							GlobalFree(hNewDib);
@@ -688,6 +703,7 @@ INT_PTR CALLBACK HeaderViewerDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPA
 						}
 
 						OutputText(hwndEdit, g_szSepThick);
+						EnableButton(hDlg, IDC_THUMB_COPY, IDC_OPEN, bSuccess);
 
 						if (bSuccess && GetFocus() != hwndEdit)
 						{
@@ -1074,6 +1090,15 @@ INT_PTR CALLBACK HeaderViewerDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPA
 			// Set the dialog box position and size
 			MySetWindowPlacement(hDlg, &wpl, FALSE);
 
+			// Register this dialog box to receive WM_CLIPBOARDUPDATE.
+			// We need this message to enable/disable the Paste button.
+			s_IsListener = AddClipboardFormatListener(hDlg);
+			if (s_IsListener)
+				PostMessage(hDlg, WM_CLIPBOARDUPDATE, 0, 0);
+
+			// Disable the Copy bitmap button
+			EnableButton(hDlg, IDC_THUMB_COPY, IDC_OPEN, FALSE);
+
 			if ((LPCTSTR)lParam != NULL && ((LPCTSTR)lParam)[0] != TEXT('\0'))
 			{ // Open a BMP file passed by program argument
 				ShortenPath((LPCTSTR)lParam, s_szFileName, _countof(s_szFileName));
@@ -1102,6 +1127,9 @@ INT_PTR CALLBACK HeaderViewerDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPA
 		case WM_CLOSE:
 		{
 			SaveSettings(hDlg, s_hfontEditBox);
+
+			if (s_IsListener)
+				s_IsListener = !RemoveClipboardFormatListener(hDlg);
 
 			DeleteWindowRect(hDlg);
 			HWND hwndChild = GetWindow(hDlg, GW_CHILD);
@@ -1203,6 +1231,9 @@ BOOL ParseFile(HWND hDlg, LPCTSTR lpszFileName)
 	{
 		OutputErrorMessage(hwndEdit, GetLastError());
 		OutputText(hwndEdit, g_szSepThick);
+		// Don't deactivate the Copy button except in the event
+		// of an error, to avoid a brief flashing of the button
+		EnableButton(hDlg, IDC_THUMB_COPY, IDC_OPEN, FALSE);
 		return FALSE;
 	}
 
@@ -1225,6 +1256,7 @@ BOOL ParseFile(HWND hDlg, LPCTSTR lpszFileName)
 	{
 		OutputErrorMessage(hwndEdit, GetLastError());
 		OutputText(hwndEdit, g_szSepThick);
+		EnableButton(hDlg, IDC_THUMB_COPY, IDC_OPEN, FALSE);
 		return FALSE;
 	}
 
@@ -1234,6 +1266,7 @@ BOOL ParseFile(HWND hDlg, LPCTSTR lpszFileName)
 	{
 		OutputTextFromID(hwndEdit, IDS_MAGIC);
 		OutputText(hwndEdit, g_szSepThick);
+		EnableButton(hDlg, IDC_THUMB_COPY, IDC_OPEN, FALSE);
 		CloseHandle(hFile);
 		return FALSE;
 	}
@@ -1249,14 +1282,17 @@ BOOL ParseFile(HWND hDlg, LPCTSTR lpszFileName)
 			if (dwError != ERROR_SUCCESS)
 				OutputErrorMessage(hwndEdit, dwError);
 		}
+		EnableButton(hDlg, IDC_THUMB_COPY, IDC_OPEN, bSuccess);
 	}
 	else if (achMagic[0] == 0xFF && achMagic[1] == 0xD8)
 	{ // JPEG
 		bSuccess = ReadJpeg(hDlg, hFile, wfad.nFileSizeLow);
+		EnableButton(hDlg, IDC_THUMB_COPY, IDC_OPEN, bSuccess);
 	}
 	else
 	{ // Unsupported file format
 		OutputTextFromID(hwndEdit, IDS_MAGIC);
+		EnableButton(hDlg, IDC_THUMB_COPY, IDC_OPEN, FALSE);
 		bSuccess = HexDump(hwndEdit, hFile, wfad.nFileSizeLow);
 	}
 
@@ -1307,12 +1343,15 @@ BOOL ReadJpeg(HWND hDlg, HANDLE hFile, DWORD dwFileSize)
 
 	SetCursor(hOldCursor);
 
-	if (hDib != NULL)
-		ReplaceThumbnail(hwndThumb, hDib);
-	else
+	if (hDib == NULL)
+	{
+		MyGlobalFreePtr(lpData);
 		SetThumbnailText(hwndThumb, IDS_UNSUPPORTED);
+		return FALSE;
+	}
 
 	MyGlobalFreePtr(lpData);
+	ReplaceThumbnail(hwndThumb, hDib);
 
 	return TRUE;
 }
