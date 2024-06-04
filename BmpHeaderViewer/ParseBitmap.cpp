@@ -151,12 +151,18 @@ BOOL ParseBitmap(HWND hDlg, HANDLE hFile, DWORD dwFileSize)
 	if (bfh.bfOffBits > dwFileHeaderSize)
 		dwOffBits = bfh.bfOffBits - dwFileHeaderSize;
 
-	BOOL bSuccess = ParseDIBitmap(hDlg, hDib, dwOffBits);
-
-	if (!bSuccess)
+	if (!ParseDIBitmap(hDlg, hDib, dwOffBits))
+	{
+		DWORD dwError = GetLastError();
 		GlobalFree(hDib);
+		if (dwError != ERROR_SUCCESS)
+			SetLastError(dwError);
+		return FALSE;
+	}
 
-	return bSuccess;
+	ReplaceThumbnail(hwndThumb, hDib);
+
+	return TRUE;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1026,8 +1032,6 @@ Exit:
 		SetThumbnailText(hwndThumb, IDS_UNSUPPORTED);
 		return FALSE;
 	}
-
-	ReplaceThumbnail(hwndThumb, hDib);
 
 	return TRUE;
 }
