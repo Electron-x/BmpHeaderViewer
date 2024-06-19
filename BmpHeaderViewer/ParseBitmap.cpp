@@ -683,7 +683,8 @@ BOOL ParseDIBitmap(HWND hDlg, HANDLE hDib, DWORD dwOffBits)
 		DWORD dwNumEntries = DibNumColors(lpbi);
 		if (dwNumEntries > 0)
 		{
-			DWORD dwOverlappedEntries = dwOverlap / sizeof(RGBQUAD);
+			SIZE_T cbEntrySize = IS_OS2PM_DIB(lpbi) ? sizeof(RGBTRIPLE) : sizeof(RGBQUAD);
+			DWORD dwOverlappedEntries = dwOverlap / (DWORD)cbEntrySize;
 
 			if (dwDibHeaderSize >= sizeof(BITMAPINFOHEADER) && dwNumEntries > dwOverlappedEntries)
 			{ // Adjust the number of color table entries
@@ -714,6 +715,9 @@ BOOL ParseDIBitmap(HWND hDlg, HANDLE hDib, DWORD dwOffBits)
 					dwOffBits = dwOffBitsPacked;
 					MoveMemory(lpNew, lpOld, dwDibSize - dwOffBits);
 					ZeroMemory(lpOld, dwOverlap);
+					// Create a grayscale palette
+					for (UINT i = 0; i < dwOverlappedEntries; i++, lpOld += cbEntrySize)
+						lpOld[0] = lpOld[1] = lpOld[2] = (BYTE)(i * 256 / dwOverlappedEntries);
 				}
 				__except (EXCEPTION_EXECUTE_HANDLER) { ; }
 			}
