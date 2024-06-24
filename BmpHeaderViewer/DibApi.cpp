@@ -143,6 +143,7 @@ HBITMAP CreatePremultipliedBitmap(HANDLE hDib)
 	LPBITMAPCOREHEADER lpbc = (LPBITMAPCOREHEADER)lpbi;
 	BOOL bIsCore = IS_OS2PM_DIB(lpbi);
 	WORD wBitCount = bIsCore ? lpbc->bcBitCount : lpbi->biBitCount;
+	BOOL bIs16Bit = (wBitCount == 16);
 
 	if ((wBitCount != 16 && wBitCount != 32) ||
 		(lpbi->biSize >= sizeof(BITMAPINFOHEADER) &&
@@ -188,81 +189,47 @@ HBITMAP CreatePremultipliedBitmap(HANDLE hDib)
 
 	__try
 	{
-		if (wBitCount == 16)
+		if (!bIsCore && lpbi->biCompression == BI_BITFIELDS)
 		{
-			if (!bIsCore && lpbi->biCompression == BI_BITFIELDS)
-			{
-				lpdwColorMasks = (LPDWORD)&(((LPBITMAPINFO)lpbi)->bmiColors[0]);
-				dwRedMask      = lpdwColorMasks[0];
-				dwGreenMask    = lpdwColorMasks[1];
-				dwBlueMask     = lpdwColorMasks[2];
-				dwAlphaMask    = lpbi->biSize >= 56 ? lpdwColorMasks[3] : 0;
-			}
-			else
-			{
-				dwRedMask   = 0x00007C00;
-				dwGreenMask = 0x000003E0;
-				dwBlueMask  = 0x0000001F;
-				dwAlphaMask = 0x00008000;
-			}
-
-			if (dwAlphaMask)
-			{
-				for (h = 0; h < lHeight; h++)
-				{
-					lpSrc = lpDIB + (ULONG_PTR)h * dwIncrement;
-					lpDest = lpBGRA + (ULONG_PTR)h * lWidth * 4;
-					for (w = 0; w < lWidth; w++)
-					{
-						dwColor = MAKELONG(MAKEWORD(lpSrc[0], lpSrc[1]), 0);
-						cAlpha = dwAlphaMask ? GetColorValue(dwColor, dwAlphaMask) : 0xFF;
-						if (cAlpha != 0x00) bHasVisiblePixels = TRUE;
-						if (cAlpha != 0xFF) bHasTransparentPixels = TRUE;
-						*lpDest++ = Mul8Bit(GetColorValue(dwColor, dwBlueMask), cAlpha);
-						*lpDest++ = Mul8Bit(GetColorValue(dwColor, dwGreenMask), cAlpha);
-						*lpDest++ = Mul8Bit(GetColorValue(dwColor, dwRedMask), cAlpha);
-						*lpDest++ = cAlpha;
-						lpSrc += 2;
-					}
-				}
-			}
+			lpdwColorMasks = (LPDWORD)&(((LPBITMAPINFO)lpbi)->bmiColors[0]);
+			dwRedMask      = lpdwColorMasks[0];
+			dwGreenMask    = lpdwColorMasks[1];
+			dwBlueMask     = lpdwColorMasks[2];
+			dwAlphaMask    = lpbi->biSize >= 56 ? lpdwColorMasks[3] : 0;
 		}
-		else if (wBitCount == 32)
+		else if (bIs16Bit)
 		{
-			if (!bIsCore && lpbi->biCompression == BI_BITFIELDS)
-			{
-				lpdwColorMasks = (LPDWORD)&(((LPBITMAPINFO)lpbi)->bmiColors[0]);
-				dwRedMask      = lpdwColorMasks[0];
-				dwGreenMask    = lpdwColorMasks[1];
-				dwBlueMask     = lpdwColorMasks[2];
-				dwAlphaMask    = lpbi->biSize >= 56 ? lpdwColorMasks[3] : 0;
-			}
-			else
-			{
-				dwRedMask   = 0x00FF0000;
-				dwGreenMask = 0x0000FF00;
-				dwBlueMask  = 0x000000FF;
-				dwAlphaMask = 0xFF000000;
-			}
+			dwRedMask   = 0x00007C00;
+			dwGreenMask = 0x000003E0;
+			dwBlueMask  = 0x0000001F;
+			dwAlphaMask = 0x00008000;
+		}
+		else
+		{
+			dwRedMask   = 0x00FF0000;
+			dwGreenMask = 0x0000FF00;
+			dwBlueMask  = 0x000000FF;
+			dwAlphaMask = 0xFF000000;
+		}
 
-			if (dwAlphaMask)
+		if (dwAlphaMask)
+		{
+			for (h = 0; h < lHeight; h++)
 			{
-				for (h = 0; h < lHeight; h++)
+				lpSrc = lpDIB + (ULONG_PTR)h * dwIncrement;
+				lpDest = lpBGRA + (ULONG_PTR)h * lWidth * 4;
+				for (w = 0; w < lWidth; w++)
 				{
-					lpSrc = lpDIB + (ULONG_PTR)h * dwIncrement;
-					lpDest = lpBGRA + (ULONG_PTR)h * lWidth * 4;
-					for (w = 0; w < lWidth; w++)
-					{
-						dwColor = MAKELONG(MAKEWORD(lpSrc[0], lpSrc[1]), MAKEWORD(lpSrc[2], lpSrc[3]));
-						cAlpha = dwAlphaMask ? GetColorValue(dwColor, dwAlphaMask) : 0xFF;
-						if (cAlpha != 0x00) bHasVisiblePixels = TRUE;
-						if (cAlpha != 0xFF) bHasTransparentPixels = TRUE;
-						*lpDest++ = Mul8Bit(GetColorValue(dwColor, dwBlueMask), cAlpha);
-						*lpDest++ = Mul8Bit(GetColorValue(dwColor, dwGreenMask), cAlpha);
-						*lpDest++ = Mul8Bit(GetColorValue(dwColor, dwRedMask), cAlpha);
-						*lpDest++ = cAlpha;
-						lpSrc += 4;
-					}
+					dwColor = MAKELONG(MAKEWORD(lpSrc[0], lpSrc[1]),
+						bIs16Bit ? 0 : MAKEWORD(lpSrc[2], lpSrc[3]));
+					cAlpha = GetColorValue(dwColor, dwAlphaMask);
+					if (cAlpha != 0x00) bHasVisiblePixels = TRUE;
+					if (cAlpha != 0xFF) bHasTransparentPixels = TRUE;
+					*lpDest++ = Mul8Bit(GetColorValue(dwColor, dwBlueMask), cAlpha);
+					*lpDest++ = Mul8Bit(GetColorValue(dwColor, dwGreenMask), cAlpha);
+					*lpDest++ = Mul8Bit(GetColorValue(dwColor, dwRedMask), cAlpha);
+					*lpDest++ = cAlpha;
+					lpSrc += bIs16Bit ? 2 : 4;
 				}
 			}
 		}
@@ -461,7 +428,7 @@ HANDLE ConvertBitmapToDib(HBITMAP hBitmap, HDC hdc, WORD wBitCount)
 
 	// Set the information header
 	lpbmi->bmiHeader = bi;
-	// Retrieve the color table and the bitmap bits
+	// Retrieve the color table and the bitmap bits. GetDIBits also fills in biSizeImage.
 	int nRet = GetDIBits(hdc, hBitmap, 0, (UINT)bi.biHeight, FindDibBits((LPCSTR)lpbmi), lpbmi, DIB_RGB_COLORS);
 
 	if (bReleaseDC)
@@ -499,6 +466,7 @@ HANDLE CreateDibFromClipboardDib(HANDLE hDib)
 	if (!DibHasColorProfile((LPCSTR)lpSrc))
 	{
 		GlobalUnlock(hDib);
+		// Nothing to fix. Just copy the DIB.
 		return CopyDib(hDib);
 	}
 
