@@ -171,17 +171,15 @@ HBITMAP CreatePremultipliedBitmap(HANDLE hDib)
 	LPBYTE lpBGRA = NULL;
 	LPBYTE lpDIB = FindDibBits((LPCSTR)lpbi);
 
-	HBITMAP hbmpDib = CreateDIBSection(NULL, &bmi, DIB_RGB_COLORS, (PVOID*)&lpBGRA, NULL, NULL);
+	HBITMAP hbmpDib = CreateDIBSection(NULL, &bmi, DIB_RGB_COLORS, (PVOID*)&lpBGRA, NULL, 0);
 	if (hbmpDib == NULL)
 	{
 		GlobalUnlock(hDib);
 		return NULL;
 	}
 
-	LONG h, w;
 	BYTE cAlpha;
 	LPBYTE lpSrc, lpDest;
-	LPDWORD lpdwColorMasks;
 	DWORD dwColor, dwRedMask, dwGreenMask, dwBlueMask, dwAlphaMask;
 	DWORD dwIncrement = WIDTHBYTES(lWidth * wBitCount);
 	BOOL bHasVisiblePixels = FALSE;
@@ -191,11 +189,11 @@ HBITMAP CreatePremultipliedBitmap(HANDLE hDib)
 	{
 		if (!bIsCore && lpbi->biCompression == BI_BITFIELDS)
 		{
-			lpdwColorMasks = (LPDWORD)&(((LPBITMAPINFO)lpbi)->bmiColors[0]);
-			dwRedMask      = lpdwColorMasks[0];
-			dwGreenMask    = lpdwColorMasks[1];
-			dwBlueMask     = lpdwColorMasks[2];
-			dwAlphaMask    = lpbi->biSize >= 56 ? lpdwColorMasks[3] : 0;
+			LPDWORD lpdwColorMasks = (LPDWORD)&(((LPBITMAPINFO)lpbi)->bmiColors[0]);
+			dwRedMask   = lpdwColorMasks[0];
+			dwGreenMask = lpdwColorMasks[1];
+			dwBlueMask  = lpdwColorMasks[2];
+			dwAlphaMask = lpbi->biSize >= 56 ? lpdwColorMasks[3] : 0;
 		}
 		else if (bIs16Bit)
 		{
@@ -214,21 +212,27 @@ HBITMAP CreatePremultipliedBitmap(HANDLE hDib)
 
 		if (dwAlphaMask)
 		{
-			for (h = 0; h < lHeight; h++)
+			for (LONG h = 0; h < lHeight; h++)
 			{
 				lpSrc = lpDIB + (ULONG_PTR)h * dwIncrement;
 				lpDest = lpBGRA + (ULONG_PTR)h * lWidth * 4;
-				for (w = 0; w < lWidth; w++)
+
+				for (LONG w = 0; w < lWidth; w++)
 				{
 					dwColor = MAKELONG(MAKEWORD(lpSrc[0], lpSrc[1]),
 						bIs16Bit ? 0 : MAKEWORD(lpSrc[2], lpSrc[3]));
 					cAlpha = GetColorValue(dwColor, dwAlphaMask);
-					if (cAlpha != 0x00) bHasVisiblePixels = TRUE;
-					if (cAlpha != 0xFF) bHasTransparentPixels = TRUE;
+
+					if (cAlpha != 0x00)
+						bHasVisiblePixels = TRUE;
+					if (cAlpha != 0xFF)
+						bHasTransparentPixels = TRUE;
+
 					*lpDest++ = Mul8Bit(GetColorValue(dwColor, dwBlueMask), cAlpha);
 					*lpDest++ = Mul8Bit(GetColorValue(dwColor, dwGreenMask), cAlpha);
 					*lpDest++ = Mul8Bit(GetColorValue(dwColor, dwRedMask), cAlpha);
 					*lpDest++ = cAlpha;
+
 					lpSrc += bIs16Bit ? 2 : 4;
 				}
 			}
@@ -824,7 +828,7 @@ UINT DibNumColors(LPCSTR lpbi)
 	{
 		wBitCount = ((LPBITMAPINFOHEADER)lpbi)->biBitCount;
 		dwClrUsed = ((LPBITMAPINFOHEADER)lpbi)->biClrUsed;
-		// Allow up to 4096 palette entries
+		// Allow up to 4096 color table entries
 		if (dwClrUsed > 0 && dwClrUsed <= (1U << 12U))
 			return dwClrUsed;
 	}
@@ -862,7 +866,7 @@ UINT PaletteSize(LPCSTR lpbi)
 
 ////////////////////////////////////////////////////////////////////////////////////////////////
 
-UINT DibImageSize(LPCSTR lpbi)
+UINT DibImageSize(LPCSTR lpbi, BOOL bCalculate)
 {
 	if (lpbi == NULL)
 		return 0;
@@ -875,7 +879,7 @@ UINT DibImageSize(LPCSTR lpbi)
 
 	LPBITMAPINFOHEADER lpbih = (LPBITMAPINFOHEADER)lpbi;
 
-	if (lpbih->biSizeImage != 0)
+	if (lpbih->biSizeImage && (!bCalculate || DibIsCompressed(lpbi)))
 		return lpbih->biSizeImage;
 
 	return WIDTHBYTES(abs(lpbih->biWidth) * lpbih->biPlanes * lpbih->biBitCount) * abs(lpbih->biHeight);
@@ -943,6 +947,20 @@ BOOL DibHasColorSpaceData(LPCSTR lpbi)
 	// We ignore linked profiles because they don't work with ICM inside DC
 	return ((dwSize >= sizeof(BITMAPV4HEADER) && lpbiv5->bV5CSType == LCS_CALIBRATED_RGB) ||
 		(dwSize >= sizeof(BITMAPV5HEADER) && lpbiv5->bV5CSType == PROFILE_EMBEDDED));
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////
+
+BOOL DibIsCompressed(LPCSTR lpbi)
+{
+	if (lpbi == NULL || IS_OS2PM_DIB(lpbi))
+		return FALSE;
+
+	DWORD dwCompression = ((LPBITMAPINFOHEADER)lpbi)->biCompression;
+
+	return (dwCompression != BI_RGB &&
+		dwCompression != BI_BITFIELDS &&
+		dwCompression != BI_ALPHABITFIELDS);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////

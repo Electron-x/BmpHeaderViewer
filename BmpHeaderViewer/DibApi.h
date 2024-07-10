@@ -89,11 +89,13 @@ UINT DibNumColors(LPCSTR lpbi);
 // Gets the size of the optional color masks of a DIBv3
 UINT ColorMasksSize(LPCSTR lpbi);
 
-// Gets the size required to store the DIBs palette
+// Gets the size required to store the DIBs color table
 UINT PaletteSize(LPCSTR lpbi);
 
-// Gets the size of the DIBs bitmap bits
-UINT DibImageSize(LPCSTR lpbi);
+// Gets the size of the DIBs bitmap bits. If bCalculate is TRUE,
+// a set value of biSizeImage is ignored for uncompressed DIBs
+// and the calculated bitmap size is returned.
+UINT DibImageSize(LPCSTR lpbi, BOOL bCalculate = FALSE);
 
 // Gets the offset from the beginning of the DIB to the bitmap bits
 UINT DibBitsOffset(LPCSTR lpbi);
@@ -109,6 +111,9 @@ BOOL DibHasColorProfile(LPCSTR lpbi);
 
 // Checks if the DIB contains color space data
 BOOL DibHasColorSpaceData(LPCSTR lpbi);
+
+// Checks if the bitmap bits of the DIB are compressed
+BOOL DibIsCompressed(LPCSTR lpbi);
 
 // Checks if the biCompression member of a DIBv3 struct contains a FourCC code
 BOOL DibIsCustomFormat(LPCSTR lpbi);
