@@ -232,6 +232,9 @@ BOOL ParseDIBitmap(HWND hDlg, HANDLE hDib, DWORD dwOffBits)
 	// Since we don't perform format conversions here, all formats that the
 	// display driver cannot directly display are marked as not displayable
 	BOOL bIsDibDisplayable = TRUE;
+	// Mark formats that cannot be displayed by a display driver but may be
+	// supported by a printer driver
+	BOOL bIsPassthroughImage = FALSE;
 
 	if (dwDibHeaderSize == sizeof(BITMAPCOREHEADER))
 	{ // OS/2 Version 1.1 Bitmap (DIBv2)
@@ -265,7 +268,9 @@ BOOL ParseDIBitmap(HWND hDlg, HANDLE hDib, DWORD dwOffBits)
 		if ((lpbih->bV5BitCount && ullBitsSize == 0) || ullBitsSize > 0x80000000L)
 			bIsDibDisplayable = FALSE;
 
-		//lpbih->bV5Compression &= ~BI_SRCPREROTATE;
+#if defined(_WIN32_WCE) && (_WIN32_WCE >= 0x501)
+		lpbih->bV5Compression &= ~BI_SRCPREROTATE;
+#endif
 		DWORD dwCompression = lpbih->bV5Compression;
 		OutputText(hwndEdit, TEXT("Compression:\t"));
 		if (isprint(dwCompression & 0xff) &&
@@ -321,9 +326,11 @@ BOOL ParseDIBitmap(HWND hDlg, HANDLE hDib, DWORD dwOffBits)
 					OutputText(hwndEdit, TEXT("BITFIELDS"));
 					break;
 				case BI_JPEG:
+					bIsPassthroughImage = TRUE;
 					OutputText(hwndEdit, TEXT("JPEG"));
 					break;
 				case BI_PNG:
+					bIsPassthroughImage = TRUE;
 					OutputText(hwndEdit, TEXT("PNG"));
 					break;
 				case BI_ALPHABITFIELDS:
@@ -348,6 +355,8 @@ BOOL ParseDIBitmap(HWND hDlg, HANDLE hDib, DWORD dwOffBits)
 		OutputText(hwndEdit, TEXT("\r\n"));
 
 		OutputTextFmt(hwndEdit, TEXT("SizeImage:\t%u bytes"), lpbih->bV5SizeImage);
+		// For uncompressed bitmaps, check whether the value of biSizeImage matches
+		// the calculated size (e.g. Adobe Photoshop adds two padding bytes)
 		if (lpbih->bV5SizeImage && ullBitsSize && ullBitsSize <= 0xFFFFFFFF &&
 			((UINT64)lpbih->bV5SizeImage - ullBitsSize) != 0 &&
 			(lpbih->bV5Compression == BI_RGB || lpbih->bV5Compression == BI_BITFIELDS ||
@@ -841,6 +850,12 @@ BOOL ParseDIBitmap(HWND hDlg, HANDLE hDib, DWORD dwOffBits)
 					AppendFlagName(szOutput, _countof(szOutput), TEXT("MCSNEEDSSUBSET"));
 				}
 
+				if (dwProfileFlags & FLAG_EXTENDEDRANGEPCS)
+				{
+					dwFlags ^= FLAG_EXTENDEDRANGEPCS;
+					AppendFlagName(szOutput, _countof(szOutput), TEXT("EXTENDEDRANGEPCS"));
+				}
+
 				if (dwFlags != 0 && dwFlags != dwProfileFlags)
 				{
 					const int FLAGS_LEN = 32;
@@ -1031,7 +1046,7 @@ BOOL ParseDIBitmap(HWND hDlg, HANDLE hDib, DWORD dwOffBits)
 Exit:
 	GlobalUnlock(hDib);
 
-	if (!bIsDibDisplayable)
+	if (!bIsDibDisplayable && !bIsPassthroughImage)
 	{
 		SetThumbnailText(hwndThumb, IDS_UNSUPPORTED);
 		return FALSE;
