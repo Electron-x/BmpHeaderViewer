@@ -355,6 +355,8 @@ A BMP file can be opened in various ways:
 
 For performance reasons, color management is only activated if the bitmap contains color space data. Color management and transparency are mutually exclusive. You can use the context menu of the thumbnail to activate or deactivate color matching for this specific image.
 
+A loaded bitmap can also be printed. This allows you to check how a specific DIB is displayed on a different output device.
+
 The program can also open JPEG files. This gives you more options for experimenting with color profiles.
 
 The font of the output window can be scaled with <kbd>CTRL</kbd>+<kbd>MOUSE SCROLL WHEEL</kbd>.
@@ -367,7 +369,7 @@ DIBs with extended BITMAPINFOHEADER fields, as described in the JPEG DIB Format 
 
 Multiple-version format bitmaps and OS/2 2.0-style DIBs with a truncated header, as described in the Presentation Manager Programming Reference, are not supported.
 
-Only the header and the tag table of an embedded color profile are displayed. However, the profile can be exported for further examination, e.g. with the [ICC Profile Inspector](https://www.color.org/profileinspector.xalter) or using [iccDumpProfile](https://github.com/InternationalColorConsortium/DemoIccMAX).
+Only the header and the tag table of an embedded color profile are displayed. However, the profile can be exported for further examination, e.g. with the [ICC Profile Inspector](https://www.color.org/profileinspector.xalter) or using [wxProfileDump](https://www.color.org/profdump.xalter).
 
 Standard DIBs and DIBs with DIB format extensions are displayed directly using Windows GDI. No format conversion takes place. For custom formats, the DrawDib API from Video for Windows is used. No other codec-based frameworks such as Windows Imaging Component are used.
 
