@@ -76,8 +76,10 @@ BOOL ReadJpeg(HWND hDlg, HANDLE hFile, DWORD dwFileSize);
 // Displays a hex dump of the first 1024 bytes of a file
 BOOL HexDump(HWND hwndEdit, HANDLE hFile, SIZE_T cbLen);
 
+// Prints the thumbnail using the specified document name
+BOOL PrintThumbnail(HWND hDlg, LPCTSTR lpszDocName);
 // Draws the thumbnail in a owner-drawn control
-BOOL OnDrawItem(HWND hDlg, const LPDRAWITEMSTRUCT lpDrawItem);
+BOOL OnDrawItem(const LPDRAWITEMSTRUCT lpDrawItem);
 // Draws a DIB with StretchDIBits or DrawDibDraw
 BOOL DrawDib(HDC hdc, LPBITMAPINFOHEADER lpbi, int xDest, int yDest, int wDest,
 	int hDest, int xSrc, int ySrc, int wSrc, int hSrc);
@@ -249,7 +251,7 @@ INT_PTR CALLBACK HeaderViewerDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPA
 	switch (message)
 	{
 		case WM_DRAWITEM:
-			return OnDrawItem(hDlg, (const LPDRAWITEMSTRUCT)lParam);
+			return OnDrawItem((const LPDRAWITEMSTRUCT)lParam);
 
 		case WM_CTLCOLORDLG:
 		case WM_CTLCOLORSTATIC:
@@ -740,6 +742,20 @@ INT_PTR CALLBACK HeaderViewerDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPA
 				}
 				return FALSE;
 
+				case IDC_THUMB_PRINT:
+				{
+					LPCTSTR lpszDocName = _tcsrchr(s_szFileName, TEXT('\\'));
+					if (lpszDocName == NULL)
+						lpszDocName = _tcsrchr(s_szFileName, TEXT('/'));
+					if (lpszDocName != NULL && *(lpszDocName + 1) != TEXT('\0'))
+						lpszDocName++;
+					else
+						lpszDocName = s_szFileName;
+
+					PrintThumbnail(hDlg, lpszDocName);
+				}
+				return FALSE;
+
 				case IDC_THUMB_COPY:
 				{ // Copy the current thumbnail to the clipboard
 					HANDLE hDib = g_hDibThumb ? g_hDibThumb : g_hDibDefault;
@@ -925,6 +941,7 @@ INT_PTR CALLBACK HeaderViewerDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPA
 					if (g_hDibThumb == NULL)
 					{
 						EnableMenuItem(hmenuTrackPopup, IDC_THUMB_COPY, MF_BYCOMMAND | MF_GRAYED);
+						EnableMenuItem(hmenuTrackPopup, IDC_THUMB_PRINT, MF_BYCOMMAND | MF_GRAYED);
 						EnableMenuItem(hmenuTrackPopup, IDC_THUMB_SAVE, MF_BYCOMMAND | MF_GRAYED);
 					}
 				}
@@ -1431,13 +1448,116 @@ BOOL HexDump(HWND hwndEdit, HANDLE hFile, SIZE_T cbLen)
 
 ////////////////////////////////////////////////////////////////////////////////////////////////
 
-BOOL OnDrawItem(HWND hDlg, const LPDRAWITEMSTRUCT lpDrawItem)
+BOOL PrintThumbnail(HWND hDlg, LPCTSTR lpszDocName)
+{
+	BOOL bCenterHorizontally = TRUE;
+	BOOL bCenterVertically = FALSE;
+
+	PRINTDLG pd = { 0 };
+	pd.lStructSize = sizeof(pd);
+	pd.hwndOwner = hDlg;
+	pd.Flags = PD_NOSELECTION | PD_RETURNDC | PD_USEDEVMODECOPIESANDCOLLATE;
+
+	// Display the Print dialog box
+	if (!PrintDlg(&pd))
+		return FALSE;
+
+	// Stretch the bitmap over the entire print
+	// area while maintaining the aspect ratio
+	LONG lHorzRes = GetDeviceCaps(pd.hDC, HORZRES);
+	LONG lVertRes = GetDeviceCaps(pd.hDC, VERTRES);
+	LONG lWidth = lHorzRes;
+	LONG lHeight = lVertRes;
+
+	HANDLE hDib = g_hDibThumb ? g_hDibThumb : g_hDibDefault;
+	if (hDib != NULL)
+	{
+		LPBITMAPINFOHEADER lpbi = (LPBITMAPINFOHEADER)GlobalLock(hDib);
+		if (lpbi != NULL)
+		{
+			BOOL bIsCore = IS_OS2PM_DIB(lpbi);
+			LPBITMAPCOREHEADER lpbc = (LPBITMAPCOREHEADER)lpbi;
+			lWidth = bIsCore ? lpbc->bcWidth : abs(lpbi->biWidth);
+			lHeight = bIsCore ? lpbc->bcHeight : abs(lpbi->biHeight);
+			GlobalUnlock(hDib);
+		}
+	}
+
+	LONG lHorzPrintArea = lHorzRes;
+	LONG lVertPrintArea = MulDiv(lHorzPrintArea, lHeight, lWidth);
+	if (lVertPrintArea > lVertRes)
+	{
+		lVertPrintArea = lVertRes;
+		lHorzPrintArea = MulDiv(lVertPrintArea, lWidth, lHeight);
+	}
+
+	RECT rcPaint = { 0 };
+	rcPaint.left = GetDeviceCaps(pd.hDC, PHYSICALOFFSETX);
+	rcPaint.top = GetDeviceCaps(pd.hDC, PHYSICALOFFSETY);
+	if (bCenterHorizontally)
+		rcPaint.left += (lHorzRes - lHorzPrintArea) / 2;
+	if (bCenterVertically)
+		rcPaint.top += (lVertRes - lVertPrintArea) / 2;
+	rcPaint.right = rcPaint.left + lHorzPrintArea;
+	rcPaint.bottom = rcPaint.top + lVertPrintArea;
+
+	DOCINFO di = { 0 };
+	di.cbSize = sizeof(di);
+	di.lpszDocName = lpszDocName;
+
+	// To print, use the same function that draws the thumbnail
+	DRAWITEMSTRUCT dis = { 0 };
+	dis.hDC = pd.hDC;
+	dis.rcItem = rcPaint;
+	dis.CtlID = IDC_THUMB;
+	dis.CtlType = ODT_BUTTON;
+	dis.itemState = ODS_DEFAULT;
+	dis.itemAction = ODA_DRAWENTIRE;
+	dis.hwndItem = GetDlgItem(hDlg, IDC_THUMB);
+
+	HCURSOR hOldCursor = SetCursor(LoadCursor(NULL, IDC_WAIT));
+
+	__try
+	{
+		if (StartDoc(pd.hDC, &di) > 0 &&
+			StartPage(pd.hDC) > 0)
+		{
+			OnDrawItem(&dis);
+			EndPage(pd.hDC);
+			EndDoc(pd.hDC);
+		}
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER)
+	{
+		AbortDoc(pd.hDC);
+	}
+
+	SetCursor(hOldCursor);
+
+	// Release the resources allocated by the Print dialog box
+	if (pd.hDevMode != NULL)
+		GlobalFree(pd.hDevMode);
+	if (pd.hDevNames != NULL)
+		GlobalFree(pd.hDevNames);
+
+	DeleteDC(pd.hDC);
+
+	return TRUE;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////
+
+BOOL OnDrawItem(const LPDRAWITEMSTRUCT lpDrawItem)
 {
 	if (lpDrawItem == NULL || lpDrawItem->CtlID != IDC_THUMB)
 		return FALSE;
 
 	HDC hdc = lpDrawItem->hDC;
 	RECT rc = lpDrawItem->rcItem;
+
+	int nRasterCaps = GetDeviceCaps(hdc, RASTERCAPS);
+	if ((nRasterCaps & RC_BITBLT) == 0)
+		return FALSE;
 
 	BOOL bSuccess = TRUE;
 	BOOL bDrawText = TRUE;
@@ -1455,7 +1575,7 @@ BOOL OnDrawItem(HWND hDlg, const LPDRAWITEMSTRUCT lpDrawItem)
 		// If necessary, create and select a color palette
 		HPALETTE hpal = NULL;
 		HPALETTE hpalOld = NULL;
-		if (GetDeviceCaps(hdc, RASTERCAPS) & RC_PALETTE)
+		if (nRasterCaps & RC_PALETTE)
 			hpal = CreateDibPalette(hDib);
 		if (hpal != NULL)
 		{

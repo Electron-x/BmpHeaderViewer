@@ -81,6 +81,7 @@ BEGIN
     POPUP "&Thumbnail"
     BEGIN
         MENUITEM "&Copy",                       IDC_THUMB_COPY
+        MENUITEM "&Print...",                   IDC_THUMB_PRINT
         MENUITEM "&Save as...",                 IDC_THUMB_SAVE
         MENUITEM SEPARATOR
         MENUITEM "Color &Management...",        IDC_THUMB_ICM

@@ -29,8 +29,9 @@
 #define IDC_THUMB                       1005
 #define IDC_PASTE                       1006
 #define IDC_THUMB_COPY                  32771
-#define IDC_THUMB_SAVE                  32772
-#define IDC_THUMB_ICM                   32773
+#define IDC_THUMB_PRINT                 32772
+#define IDC_THUMB_SAVE                  32773
+#define IDC_THUMB_ICM                   32774
 #define IDC_STATIC                      -1
 
 // Next default values for new objects
@@ -39,7 +40,7 @@
 #ifndef APSTUDIO_READONLY_SYMBOLS
 #define _APS_NO_MFC                     1
 #define _APS_NEXT_RESOURCE_VALUE        106
-#define _APS_NEXT_COMMAND_VALUE         32774
+#define _APS_NEXT_COMMAND_VALUE         32775
 #define _APS_NEXT_CONTROL_VALUE         1007
 #define _APS_NEXT_SYMED_VALUE           101
 #endif
