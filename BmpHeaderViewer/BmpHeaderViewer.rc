@@ -135,7 +135,7 @@ IDI_HEADERVIEWER        ICON                    "BmpHeaderViewer.ico"
 //
 
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 1,2,0,2
+ FILEVERSION 1,2,0,3
  PRODUCTVERSION 1,0,0,0
  FILEFLAGSMASK 0x3fL
 #ifdef _DEBUG
@@ -154,7 +154,7 @@ BEGIN
             VALUE "Comments", "Windows Bitmap header viewer"
             VALUE "CompanyName", "Electron"
             VALUE "FileDescription", "BMP Header Viewer"
-            VALUE "FileVersion", "1.2.0.2"
+            VALUE "FileVersion", "1.2.0.3"
             VALUE "InternalName", "BmpHeaderViewer"
             VALUE "LegalCopyright", "Copyright © 2024 by W. Rolke"
             VALUE "OriginalFilename", "BmpHeaderViewer.exe"
