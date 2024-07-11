@@ -1492,12 +1492,8 @@ BOOL PrintThumbnail(HWND hDlg, LPCTSTR lpszDocName)
 	}
 
 	RECT rcPaint = { 0 };
-	rcPaint.left = GetDeviceCaps(pd.hDC, PHYSICALOFFSETX);
-	rcPaint.top = GetDeviceCaps(pd.hDC, PHYSICALOFFSETY);
-	if (bCenterHorizontally)
-		rcPaint.left += (lHorzRes - lHorzPrintArea) / 2;
-	if (bCenterVertically)
-		rcPaint.top += (lVertRes - lVertPrintArea) / 2;
+	rcPaint.left = bCenterHorizontally ? (lHorzRes - lHorzPrintArea) / 2 : 0;
+	rcPaint.top = bCenterVertically ? (lVertRes - lVertPrintArea) / 2 : 0;
 	rcPaint.right = rcPaint.left + lHorzPrintArea;
 	rcPaint.bottom = rcPaint.top + lVertPrintArea;
 
