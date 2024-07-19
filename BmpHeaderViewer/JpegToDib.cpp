@@ -94,9 +94,12 @@ HANDLE JpegToDib(LPVOID lpJpegData, DWORD dwLenData, INT nTraceLevel)
 	// Determine image information
 	jpeg_read_header(pjInfo, TRUE);
 
-	// Read an existing ICC profile
+	// Read an existing ICC profile. In the case of a CMYK output, however,
+	// we rudimentarily convert CMYK to RGB and discard the color profile.
 	UINT uProfileLen = 0;
-	BOOL bHasProfile = read_icc_profile(pjInfo, &JpegDecompress.lpProfileData, &uProfileLen);
+	BOOL bHasProfile = FALSE;
+	if (pjInfo->out_color_space != JCS_CMYK)
+		bHasProfile = read_icc_profile(pjInfo, &JpegDecompress.lpProfileData, &uProfileLen);
 
 	// Image resolution
 	LONG lXPelsPerMeter = 0;
@@ -154,7 +157,7 @@ HANDLE JpegToDib(LPVOID lpJpegData, DWORD dwLenData, INT nTraceLevel)
 	lpBIV5->bV5YPelsPerMeter = lYPelsPerMeter;
 	lpBIV5->bV5ClrUsed = uNumColors;
 
-	// Create palette
+	// Create color table
 	if (wBitDepth == 8)
 	{
 		LPRGBQUAD lprgbqColors = (LPRGBQUAD)FindDibPalette((LPCSTR)lpBIV5);
@@ -171,7 +174,7 @@ HANDLE JpegToDib(LPVOID lpJpegData, DWORD dwLenData, INT nTraceLevel)
 		else
 		{ // Palette image
 			for (UINT u = 0; u < uNumColors; u++)
-			{  // Copy palette
+			{  // Copy color table
 				lprgbqColors[u].rgbRed   = pjInfo->colormap[0][u];
 				lprgbqColors[u].rgbGreen = pjInfo->colormap[1][u];
 				lprgbqColors[u].rgbBlue  = pjInfo->colormap[2][u];
@@ -185,7 +188,9 @@ HANDLE JpegToDib(LPVOID lpJpegData, DWORD dwLenData, INT nTraceLevel)
 	LPBYTE lpBits = NULL;            // Pointer to a DIB image row
 	JSAMPROW lpScanlines[1] = { 0 }; // Pointer to a scanline
 	JDIMENSION uScanline = 0;        // Row index
-	BYTE cKey, cRed, cBlue;          // Color components
+	BYTE cKey, cRed, cGreen, cBlue;  // Color components
+	// Consider that Adobe Photoshop writes inverted CMYK data
+	BYTE cInv = pjInfo->saw_Adobe_marker ? 0 : 255;
 
 	// Copy image rows (scanlines). The arrangement of the color
 	// components must be changed in jmorecfg.h from RGB to BGR.
@@ -195,17 +200,19 @@ HANDLE JpegToDib(LPVOID lpJpegData, DWORD dwLenData, INT nTraceLevel)
 		lpBits = lpDIB + (UINT_PTR)uScanline * uIncrement;
 		lpScanlines[0] = lpBits;
 
-		jpeg_read_scanlines(pjInfo, lpScanlines, 1);  // Decompress one line
+		// Decompress one line
+		jpeg_read_scanlines(pjInfo, lpScanlines, 1);
 
-		if (!bHasProfile && pjInfo->out_color_space == JCS_CMYK)
-		{ // Convert from inverted CMYK to RGB
+		if (pjInfo->out_color_space == JCS_CMYK)
+		{ // Convert from CMYK to RGB
 			for (UINT u = 0; u < (pjInfo->output_width * 4); u += 4)
 			{
-				cKey  = lpBits[u + 3];
-				cRed  = Mul8Bit(lpBits[u + 0], cKey);
-				cBlue = Mul8Bit(lpBits[u + 2], cKey);
-				lpBits[u + 1] = Mul8Bit(lpBits[u + 1], cKey);
+				cKey   = lpBits[u + 3] ^ cInv;
+				cBlue  = Mul8Bit(lpBits[u + 2] ^ cInv, cKey);
+				cGreen = Mul8Bit(lpBits[u + 1] ^ cInv, cKey);
+				cRed   = Mul8Bit(lpBits[u + 0] ^ cInv, cKey);
 				lpBits[u + 0] = cBlue;
+				lpBits[u + 1] = cGreen;
 				lpBits[u + 2] = cRed;
 				lpBits[u + 3] = 0xFF;
 			}
