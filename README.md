@@ -3,7 +3,7 @@
 ## Windows Bitmap (header) viewer application
 
 BMP Header Viewer is a small Windows application that displays the headers and metadata of Windows Bitmap files of almost all formats.  
-The DIB contained in the BMP file is displayed using GDI or VfW. An alpha channel and limited color management are supported. The application supports the transfer of bitmaps via the clipboard. It is also possible to export the ICC profile of a BMP file.
+The DIB contained in the BMP file is displayed using Windows GDI or Video for Windows. An alpha channel and limited color management are supported. The application supports the transfer of bitmaps via the clipboard. It is also possible to print a bitmap and export the ICC profile of a BMP file.
 
 <p>
 <picture>
@@ -334,11 +334,11 @@ Creator:	ADBE
 TagCount:	5
 ------------------------------------------------------------------------
 Sig. | Element Offset | Element Size |
-cprt |      192 bytes |     76 bytes |
-desc |      268 bytes |    105 bytes |
-wtpt |      376 bytes |     20 bytes |
-bkpt |      396 bytes |     20 bytes |
-kTRC |      416 bytes |     14 bytes |
+cprt |      192 bytes |     76 bytes | Copyright (c) 1999 Adobe Systems Incorporated. All Rights Reserved.
+desc |      268 bytes |    105 bytes | Gray Gamma 2.2
+wtpt |      376 bytes |     20 bytes | X = 0.9505, Y = 1.0000, Z = 1.0891
+bkpt |      396 bytes |     20 bytes | X = 0.0000, Y = 0.0000, Z = 0.0000
+kTRC |      416 bytes |     14 bytes | Y = X ^ 2.1992
 ========================================================================
 
 ```
@@ -369,7 +369,7 @@ DIBs with extended BITMAPINFOHEADER fields, as described in the JPEG DIB Format 
 
 Multiple-version format bitmaps and OS/2 2.0-style DIBs with a truncated header, as described in the Presentation Manager Programming Reference, are not supported.
 
-Only the header and the tag table of an embedded color profile are displayed. However, the profile can be exported for further examination, e.g. with the [ICC Profile Inspector](https://www.color.org/profileinspector.xalter) or using [wxProfileDump](https://www.color.org/profdump.xalter).
+The tool displays the header and tag table of an embedded color profile. Tag data is only displayed if it can be displayed in a single line. However, the profile can be exported for further examination, e.g. with the [ICC Profile Inspector](https://www.color.org/profileinspector.xalter) or using [wxProfileDump](https://www.color.org/profdump.xalter).
 
 Standard DIBs and DIBs with DIB format extensions are displayed directly using Windows GDI. No format conversion takes place. For custom formats, the DrawDib API from Video for Windows is used. No other codec-based frameworks such as Windows Imaging Component are used.
 
