@@ -23,6 +23,8 @@
 
 // Outputs an ICC profile signature given in big-endian format
 void PrintProfileSignature(HWND hwndEdit, LPCTSTR lpszName, DWORD dwSignature, BOOL bAddCrLf = TRUE);
+// Outputs ICC profile tag data. Only simple structures that can be displayed in one line are supported.
+void PrintProfileTagData(HWND hwndEdit, LPCTSTR lpszName, LPCSTR lpData, DWORD dwSize, BOOL bAddCrLf = FALSE);
 
 // Returns the color name if the color passed is one of the 20 static system palette colors
 BOOL GetColorName(COLORREF rgbColor, LPCTSTR* lpszName);
@@ -777,7 +779,7 @@ BOOL ParseDIBitmap(HWND hDlg, HANDLE hDib, DWORD dwOffBits)
 		}
 		else if (lpbih->bV5CSType == PROFILE_EMBEDDED)
 		{
-			if (lpbih->bV5ProfileSize < (sizeof(PROFILEV5HEADER) + sizeof(DWORD)))
+			if (lpbih->bV5ProfileSize < sizeof(PROFILEV5HEADER))
 			{
 				GlobalUnlock(hDib);
 				OutputTextFromID(hwndEdit, IDS_CORRUPTED);
@@ -786,13 +788,21 @@ BOOL ParseDIBitmap(HWND hDlg, HANDLE hDib, DWORD dwOffBits)
 
 			// Output the ICC profile header
 			LPPROFILEV5HEADER lpph = (LPPROFILEV5HEADER)(lpbi + lpbih->bV5ProfileData);
+			DWORD dwProfileSize = _byteswap_ulong(lpph->phSize);
 			DWORD dwVersion = _byteswap_ulong(lpph->phVersion);
 
 			if (_byteswap_ulong(lpph->phSignature) != 'acsp' && dwVersion != 0x00000100)
 				goto Exit;
 
 			OutputText(hwndEdit, g_szSepThin);
-			OutputTextFmt(hwndEdit, TEXT("ProfileSize:\t%u bytes\r\n"), _byteswap_ulong(lpph->phSize));
+			OutputTextFmt(hwndEdit, TEXT("ProfileSize:\t%u bytes\r\n"), dwProfileSize);
+
+			if (dwProfileSize != lpbih->bV5ProfileSize)
+			{
+				GlobalUnlock(hDib);
+				OutputTextFromID(hwndEdit, IDS_CORRUPTED);
+				return FALSE;
+			}
 
 			PrintProfileSignature(hwndEdit, TEXT("CMMType:\t"), lpph->phCMMType);
 
@@ -1018,27 +1028,25 @@ BOOL ParseDIBitmap(HWND hDlg, HANDLE hDib, DWORD dwOffBits)
 			if (dwTagCount == 0)
 				goto Exit;
 
-			if (lpbih->bV5ProfileSize < (sizeof(PROFILEV5HEADER) + sizeof(DWORD) + 3 * sizeof(DWORD) * dwTagCount))
-			{
-				GlobalUnlock(hDib);
-				OutputTextFromID(hwndEdit, IDS_CORRUPTED);
-				return FALSE;
-			}
-
-			// Side note: The private tag 'ICC5' indicates that an iccMAX profile (tag type signature: 'ICCp')
-			// is embedded in an ICC v2 or v4 profile, and the private tag 'MS00' indicates that WCS profile
-			// data (type signature: 'MS10') is embedded in an (output) ICC profile
+			DWORD dwSignature = 0;
+			DWORD dwElementSize = 0;
+			DWORD dwElementOffset = 0;
+			LPDWORD lpdwTags = lpdwTagTable + 1;
 
 			OutputText(hwndEdit, g_szSepThin);
 			OutputText(hwndEdit, TEXT("Sig. | Element Offset | Element Size |\r\n"));
 
-			LPDWORD lpdwTags = lpdwTagTable + 1;
 			while (dwTagCount--)
 			{
-				PrintProfileSignature(hwndEdit, NULL, *lpdwTags++, FALSE);
-				OutputTextFmt(hwndEdit, TEXT(" | %8u bytes"), _byteswap_ulong(*lpdwTags++));
-				OutputTextFmt(hwndEdit, TEXT(" | %6u bytes"), _byteswap_ulong(*lpdwTags++));
-				OutputText(hwndEdit, TEXT(" |\r\n"));
+				dwSignature = *lpdwTags++;
+				dwElementOffset = _byteswap_ulong(*lpdwTags++);
+				dwElementSize = _byteswap_ulong(*lpdwTags++);
+
+				PrintProfileSignature(hwndEdit, NULL, dwSignature, FALSE);
+				OutputTextFmt(hwndEdit, TEXT(" | %8u bytes"), dwElementOffset);
+				OutputTextFmt(hwndEdit, TEXT(" | %6u bytes |"), dwElementSize);
+				PrintProfileTagData(hwndEdit, TEXT(" "), (LPSTR)lpph + dwElementOffset, dwElementSize);
+				OutputText(hwndEdit, TEXT("\r\n"));
 			}
 		}
 	}
@@ -1091,6 +1099,180 @@ void PrintProfileSignature(HWND hwndEdit, LPCTSTR lpszName, DWORD dwSignature, B
 			}
 			else
 				OutputTextFmt(hwndEdit, TEXT("%08X"), _byteswap_ulong(dwSignature));
+
+	if (bAddCrLf)
+		OutputText(hwndEdit, TEXT("\r\n"));
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////
+
+void PrintProfileTagData(HWND hwndEdit, LPCTSTR lpszName, LPCSTR lpData, DWORD dwSize, BOOL bAddCrLf)
+{
+	if (hwndEdit == NULL || lpData == NULL || dwSize < 4)
+		return;
+
+	// Don't show anything if the total length of the text exceeds
+	// OUTPUT_LEN. Otherwise OutputTextFmt would cut off the text.
+	// The different types of line breaks are not taken into account.
+	SIZE_T cchMaxLen = OUTPUT_LEN - 39;
+	if (lpszName != NULL)
+		cchMaxLen -= _tcslen(lpszName);
+
+	// Retrieve the tag type signature
+	DWORD dwSignature = _byteswap_ulong(*(LPDWORD)lpData);
+
+	switch (dwSignature)
+	{
+		case 'sig ': // signatureType
+			if (dwSize == 12)
+				PrintProfileSignature(hwndEdit, lpszName, *(LPDWORD)(lpData + 8), FALSE);
+			break;
+
+		case 'text': // textType
+			if (dwSize > 8)
+			{
+				UINT cbStringLen = dwSize - 8;
+				if (cbStringLen > 0 && cbStringLen <= cchMaxLen)
+				{
+					// From profile v4, the terminating NULL is no longer mandatory
+					cbStringLen += sizeof(CHAR);
+					LPSTR pszText = (LPSTR)MyGlobalAllocPtr(GHND, cbStringLen);
+					if (pszText != NULL)
+					{
+						if (lpszName != NULL)
+							OutputText(hwndEdit, lpszName);
+
+						MyStrNCpyA(pszText, lpData + 8, cbStringLen);
+						OutputTextFmt(hwndEdit, TEXT("%S"), pszText);
+						MyGlobalFreePtr(pszText);
+					}
+				}
+			}
+			break;
+
+		case 'desc': // textDescriptionType
+			if (dwSize > 12)
+			{ // We only support the ASCII structure
+				UINT cbStringLen = _byteswap_ulong(*(LPDWORD)(lpData + 8));
+				if (cbStringLen > 0 && cbStringLen <= cchMaxLen)
+				{
+					cbStringLen += sizeof(CHAR);
+					LPSTR pszText = (LPSTR)MyGlobalAllocPtr(GHND, cbStringLen);
+					if (pszText != NULL)
+					{
+						if (lpszName != NULL)
+							OutputText(hwndEdit, lpszName);
+
+						MyStrNCpyA(pszText, lpData + 12, cbStringLen);
+						OutputTextFmt(hwndEdit, TEXT("%S"), pszText);
+						MyGlobalFreePtr(pszText);
+					}
+				}
+			}
+			break;
+
+		case 'utf8': // utf8Type
+			if (dwSize > 8)
+			{
+				UINT cbMultiLen = dwSize - 8;
+				if (cbMultiLen > 0 && cbMultiLen <= cchMaxLen)
+				{
+					UINT cchWideLen = MultiByteToWideChar(CP_UTF8, 0, lpData + 8, cbMultiLen, NULL, 0);
+					if (cchWideLen > 0)
+					{
+						LPWSTR pszWide = (LPWSTR)MyGlobalAllocPtr(GHND, cchWideLen + sizeof(WCHAR));
+						if (pszWide != NULL)
+						{
+							if (lpszName != NULL)
+								OutputText(hwndEdit, lpszName);
+
+							// Convert the UTF-8 string to Unicode UTF-16
+							MultiByteToWideChar(CP_UTF8, 0, lpData + 8, cbMultiLen, pszWide, cchWideLen);
+
+							OutputText(hwndEdit, pszWide);
+							MyGlobalFreePtr(pszWide);
+						}
+					}
+				}
+			}
+			break;
+
+		case 'mluc': // multiLocalizedUnicodeType
+			if (dwSize > 28 && _byteswap_ulong(*(LPDWORD)(lpData + 8)) > 0)
+			{ // We only support the first record
+				UINT cbStringLen = _byteswap_ulong(*(LPDWORD)(lpData + 20));
+				if (cbStringLen > 0 && (cbStringLen / sizeof(WCHAR)) <= cchMaxLen)
+				{
+					LPCWSTR pszSrc = (LPCWSTR)(lpData + _byteswap_ulong(*(LPDWORD)(lpData + 24)));
+					LPWSTR pszDest = (LPWSTR)MyGlobalAllocPtr(GHND, cbStringLen + sizeof(WCHAR));
+					if (pszDest != NULL)
+					{
+						if (lpszName != NULL)
+							OutputText(hwndEdit, lpszName);
+
+						// Convert the Unicode string from BE to LE
+						UINT cchStringLen = cbStringLen / sizeof(WCHAR);
+						for (UINT i = 0; i < cchStringLen; i++)
+							_sntprintf(pszDest, cchStringLen, TEXT("%s%c"), pszDest, _byteswap_ushort(pszSrc[i]));
+
+						OutputText(hwndEdit, pszDest);
+						MyGlobalFreePtr(pszDest);
+					}
+				}
+			}
+			break;
+
+		case 'curv': // curveType
+			if (dwSize >= 12)
+			{
+				DWORD dwCount = _byteswap_ulong(*(LPDWORD)(lpData + 8));
+				if (dwCount == 0 || dwCount == 1)
+				{ // We only support the gamma value
+					if (lpszName != NULL)
+						OutputText(hwndEdit, lpszName);
+
+					if (dwCount == 0)
+						OutputText(hwndEdit, TEXT("Y = X"));
+					else
+						OutputTextFmt(hwndEdit, TEXT("Y = X ^ %.4f"),
+							(double)(LONG32)_byteswap_ushort(*(LPWORD)(lpData + 12)) / 0x100);
+				}
+			}
+			break;
+
+		case 'XYZ ': // XYZType
+			if (dwSize == 20)
+			{ // We only support arrays with one set of values
+				if (lpszName != NULL)
+					OutputText(hwndEdit, lpszName);
+
+				OutputTextFmt(hwndEdit, TEXT("X = %.4f, Y = %.4f, Z = %.4f"),
+					(double)(LONG32)_byteswap_ulong(*(LPDWORD)(lpData + 8)) / 0x10000,
+					(double)(LONG32)_byteswap_ulong(*(LPDWORD)(lpData + 12)) / 0x10000,
+					(double)(LONG32)_byteswap_ulong(*(LPDWORD)(lpData + 16)) / 0x10000);
+			}
+			break;
+
+		case 'ICCp': // embeddedProfileType
+			if (dwSize > 8)
+			{
+				if (lpszName != NULL)
+					OutputText(hwndEdit, lpszName);
+
+				OutputText(hwndEdit, TEXT("[Embedded ICC.2 profile]"));
+			}
+			break;
+
+		case 'MS10': // WcsProfilesTagType
+			if (dwSize > 8)
+			{
+				if (lpszName != NULL)
+					OutputText(hwndEdit, lpszName);
+
+				OutputText(hwndEdit, TEXT("[Embedded WCS profiles]"));
+			}
+			break;
+	}
 
 	if (bAddCrLf)
 		OutputText(hwndEdit, TEXT("\r\n"));
