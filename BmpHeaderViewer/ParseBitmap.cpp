@@ -1113,7 +1113,6 @@ void PrintProfileTagData(HWND hwndEdit, LPCTSTR lpszName, LPCSTR lpData, DWORD d
 
 	// Don't show anything if the total length of the text exceeds
 	// OUTPUT_LEN. Otherwise OutputTextFmt would cut off the text.
-	// The different types of line breaks are not taken into account.
 	SIZE_T cchMaxLen = OUTPUT_LEN - 39;
 	if (lpszName != NULL)
 		cchMaxLen -= _tcslen(lpszName);
@@ -1139,11 +1138,14 @@ void PrintProfileTagData(HWND hwndEdit, LPCTSTR lpszName, LPCSTR lpData, DWORD d
 					LPSTR pszText = (LPSTR)MyGlobalAllocPtr(GHND, cbStringLen);
 					if (pszText != NULL)
 					{
-						if (lpszName != NULL)
-							OutputText(hwndEdit, lpszName);
-
 						MyStrNCpyA(pszText, lpData + 8, cbStringLen);
-						OutputTextFmt(hwndEdit, TEXT("%S"), pszText);
+						// Skip the entire element if the text contains line breaks
+						if (strpbrk((PCSTR)pszText, "\r\n") == NULL)
+						{
+							if (lpszName != NULL)
+								OutputText(hwndEdit, lpszName);
+							OutputTextFmt(hwndEdit, TEXT("%S"), pszText);
+						}
 						MyGlobalFreePtr(pszText);
 					}
 				}
@@ -1160,10 +1162,9 @@ void PrintProfileTagData(HWND hwndEdit, LPCTSTR lpszName, LPCSTR lpData, DWORD d
 					LPSTR pszText = (LPSTR)MyGlobalAllocPtr(GHND, cbStringLen);
 					if (pszText != NULL)
 					{
+						MyStrNCpyA(pszText, lpData + 12, cbStringLen);
 						if (lpszName != NULL)
 							OutputText(hwndEdit, lpszName);
-
-						MyStrNCpyA(pszText, lpData + 12, cbStringLen);
 						OutputTextFmt(hwndEdit, TEXT("%S"), pszText);
 						MyGlobalFreePtr(pszText);
 					}
@@ -1183,12 +1184,11 @@ void PrintProfileTagData(HWND hwndEdit, LPCTSTR lpszName, LPCSTR lpData, DWORD d
 						LPWSTR pszWide = (LPWSTR)MyGlobalAllocPtr(GHND, cchWideLen + sizeof(WCHAR));
 						if (pszWide != NULL)
 						{
-							if (lpszName != NULL)
-								OutputText(hwndEdit, lpszName);
-
 							// Convert the UTF-8 string to Unicode UTF-16
 							MultiByteToWideChar(CP_UTF8, 0, lpData + 8, cbMultiLen, pszWide, cchWideLen);
 
+							if (lpszName != NULL)
+								OutputText(hwndEdit, lpszName);
 							OutputText(hwndEdit, pszWide);
 							MyGlobalFreePtr(pszWide);
 						}
@@ -1207,14 +1207,13 @@ void PrintProfileTagData(HWND hwndEdit, LPCTSTR lpszName, LPCSTR lpData, DWORD d
 					LPWSTR pszDest = (LPWSTR)MyGlobalAllocPtr(GHND, cbStringLen + sizeof(WCHAR));
 					if (pszDest != NULL)
 					{
-						if (lpszName != NULL)
-							OutputText(hwndEdit, lpszName);
-
 						// Convert the Unicode string from BE to LE
 						UINT cchStringLen = cbStringLen / sizeof(WCHAR);
 						for (UINT i = 0; i < cchStringLen; i++)
 							_sntprintf(pszDest, cchStringLen, TEXT("%s%c"), pszDest, _byteswap_ushort(pszSrc[i]));
 
+						if (lpszName != NULL)
+							OutputText(hwndEdit, lpszName);
 						OutputText(hwndEdit, pszDest);
 						MyGlobalFreePtr(pszDest);
 					}
