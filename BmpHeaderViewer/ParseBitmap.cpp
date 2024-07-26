@@ -1163,9 +1163,12 @@ void PrintProfileTagData(HWND hwndEdit, LPCTSTR lpszName, LPCSTR lpData, DWORD d
 					if (pszText != NULL)
 					{
 						MyStrNCpyA(pszText, lpData + 12, cbStringLen);
-						if (lpszName != NULL)
-							OutputText(hwndEdit, lpszName);
-						OutputTextFmt(hwndEdit, TEXT("%S"), pszText);
+						if (strpbrk((PCSTR)pszText, "\r\n") == NULL)
+						{
+							if (lpszName != NULL)
+								OutputText(hwndEdit, lpszName);
+							OutputTextFmt(hwndEdit, TEXT("%S"), pszText);
+						}
 						MyGlobalFreePtr(pszText);
 					}
 				}
@@ -1187,9 +1190,12 @@ void PrintProfileTagData(HWND hwndEdit, LPCTSTR lpszName, LPCSTR lpData, DWORD d
 							// Convert the UTF-8 string to Unicode UTF-16
 							MultiByteToWideChar(CP_UTF8, 0, lpData + 8, cbMultiLen, pszWide, cchWideLen);
 
-							if (lpszName != NULL)
-								OutputText(hwndEdit, lpszName);
-							OutputText(hwndEdit, pszWide);
+							if (wcspbrk((PCWSTR)pszWide, L"\r\n") == NULL)
+							{
+								if (lpszName != NULL)
+									OutputText(hwndEdit, lpszName);
+								OutputText(hwndEdit, pszWide);
+							}
 							MyGlobalFreePtr(pszWide);
 						}
 					}
@@ -1211,10 +1217,14 @@ void PrintProfileTagData(HWND hwndEdit, LPCTSTR lpszName, LPCSTR lpData, DWORD d
 						UINT cchStringLen = cbStringLen / sizeof(WCHAR);
 						for (UINT i = 0; i < cchStringLen; i++)
 							_sntprintf(pszDest, cchStringLen, TEXT("%s%c"), pszDest, _byteswap_ushort(pszSrc[i]));
+						pszDest[cchStringLen] = L'\0';
 
-						if (lpszName != NULL)
-							OutputText(hwndEdit, lpszName);
-						OutputText(hwndEdit, pszDest);
+						if (wcspbrk((PCWSTR)pszDest, L"\r\n") == NULL)
+						{
+							if (lpszName != NULL)
+								OutputText(hwndEdit, lpszName);
+							OutputText(hwndEdit, pszDest);
+						}
 						MyGlobalFreePtr(pszDest);
 					}
 				}
@@ -1246,7 +1256,7 @@ void PrintProfileTagData(HWND hwndEdit, LPCTSTR lpszName, LPCSTR lpData, DWORD d
 					OutputText(hwndEdit, lpszName);
 
 				OutputTextFmt(hwndEdit, TEXT("X = %.4f, Y = %.4f, Z = %.4f"),
-					(double)(LONG32)_byteswap_ulong(*(LPDWORD)(lpData + 8)) / 0x10000,
+					(double)(LONG32)_byteswap_ulong(*(LPDWORD)(lpData +  8)) / 0x10000,
 					(double)(LONG32)_byteswap_ulong(*(LPDWORD)(lpData + 12)) / 0x10000,
 					(double)(LONG32)_byteswap_ulong(*(LPDWORD)(lpData + 16)) / 0x10000);
 			}
