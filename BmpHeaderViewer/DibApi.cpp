@@ -520,11 +520,18 @@ HANDLE CreateDibFromClipboardDib(HANDLE hDib)
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////
+// It looks like Windows still has the problem of synthesizing a valid DIBv5 from an RLE-compressed
+// DIBv3 or from a DIBv3 with color masks. In such a case, the second parameter of this function
+// can be used to force the creation of a DIBv5. This DIB can then also be placed on the clipboard.
 
 HANDLE CreateClipboardDib(HANDLE hDib, UINT *puFormat)
 {
 	if (hDib == NULL)
 		return NULL;
+
+	BOOL bForceDibV5 = FALSE;
+	if (puFormat != NULL)
+		bForceDibV5 = (*puFormat == CF_DIBV5);
 
 	SIZE_T cbLen = GlobalSize(hDib);
 	if (cbLen == 0)
@@ -536,23 +543,24 @@ HANDLE CreateClipboardDib(HANDLE hDib, UINT *puFormat)
 	
 	HANDLE hNewDib = NULL;
 	DWORD dwSrcHeaderSize = *(LPDWORD)lpSrc;
+	DWORD dwDestHeaderSize = bForceDibV5 ? sizeof(BITMAPV5HEADER) : sizeof(BITMAPINFOHEADER);
 
 	if (dwSrcHeaderSize == sizeof(BITMAPCOREHEADER))
 	{
-		// Create a new DIBv3 from a DIBv2
+		// Create a new DIBv3 (or a DIBv5, if requested) from a DIBv2
 		LPBITMAPCOREINFO lpbmci = (LPBITMAPCOREINFO)lpSrc;
 		UINT uColors = DibNumColors((LPCSTR)lpbmci);
 		UINT uImageSize = DibImageSize((LPCSTR)lpbmci);
 
 		hNewDib = GlobalAlloc(GMEM_MOVEABLE | GMEM_ZEROINIT | GMEM_DDESHARE,
-			sizeof(BITMAPINFOHEADER) + uColors * sizeof(RGBQUAD) + uImageSize);
+			dwDestHeaderSize + uColors * sizeof(RGBQUAD) + uImageSize);
 		if (hNewDib == NULL)
 		{
 			GlobalUnlock(hDib);
 			return NULL;
 		}
 
-		LPBYTE lpDest = (LPBYTE)GlobalLock(hNewDib);
+		LPBITMAPV5HEADER lpDest = (LPBITMAPV5HEADER)GlobalLock(hNewDib);
 		if (lpDest == NULL)
 		{
 			GlobalFree(hNewDib);
@@ -560,27 +568,31 @@ HANDLE CreateClipboardDib(HANDLE hDib, UINT *puFormat)
 			return NULL;
 		}
 
-		LPBITMAPINFO lpbmi = (LPBITMAPINFO)lpDest;
-		lpbmi->bmiHeader.biSize      = sizeof(BITMAPINFOHEADER);
-		lpbmi->bmiHeader.biWidth     = lpbmci->bmciHeader.bcWidth;
-		lpbmi->bmiHeader.biHeight    = lpbmci->bmciHeader.bcHeight;
-		lpbmi->bmiHeader.biPlanes    = lpbmci->bmciHeader.bcPlanes;
-		lpbmi->bmiHeader.biBitCount  = lpbmci->bmciHeader.bcBitCount;
-		lpbmi->bmiHeader.biSizeImage = uImageSize;
-		lpbmi->bmiHeader.biClrUsed   = uColors;
+		lpDest->bV5Size      = dwDestHeaderSize;
+		lpDest->bV5Width     = lpbmci->bmciHeader.bcWidth;
+		lpDest->bV5Height    = lpbmci->bmciHeader.bcHeight;
+		lpDest->bV5Planes    = lpbmci->bmciHeader.bcPlanes;
+		lpDest->bV5BitCount  = lpbmci->bmciHeader.bcBitCount;
+		lpDest->bV5SizeImage = uImageSize;
+		lpDest->bV5ClrUsed   = uColors;
+
+		if (bForceDibV5)
+		{
+			lpDest->bV5Intent = LCS_GM_IMAGES;
+			lpDest->bV5CSType = LCS_sRGB;
+		}
 
 		__try
 		{
 			if (uColors > 0)
 			{
-				RGBQUAD rgbQuad = { 0 };
+				LPRGBQUAD lprgbqColors = (LPRGBQUAD)FindDibPalette((LPCSTR)lpDest);
 				for (UINT u = 0; u < uColors; u++)
 				{
-					rgbQuad.rgbRed   = lpbmci->bmciColors[u].rgbtRed;
-					rgbQuad.rgbGreen = lpbmci->bmciColors[u].rgbtGreen;
-					rgbQuad.rgbBlue  = lpbmci->bmciColors[u].rgbtBlue;
-					rgbQuad.rgbReserved = 0;
-					lpbmi->bmiColors[u] = rgbQuad;
+					lprgbqColors[u].rgbRed   = lpbmci->bmciColors[u].rgbtRed;
+					lprgbqColors[u].rgbGreen = lpbmci->bmciColors[u].rgbtGreen;
+					lprgbqColors[u].rgbBlue  = lpbmci->bmciColors[u].rgbtBlue;
+					lprgbqColors[u].rgbReserved = 0;
 				}
 			}
 
@@ -592,9 +604,8 @@ HANDLE CreateClipboardDib(HANDLE hDib, UINT *puFormat)
 	}
 	else if (dwSrcHeaderSize == 64)
 	{
-		// Create a new DIBv3 from an OS/2 2.0 DIB
-		hNewDib = GlobalAlloc(GMEM_MOVEABLE | GMEM_DDESHARE,
-			cbLen + sizeof(BITMAPINFOHEADER) - dwSrcHeaderSize);
+		// Create a new DIBv3 (or DIBv5) from an OS/2 2.0 DIB
+		hNewDib = GlobalAlloc(GMEM_MOVEABLE | GMEM_DDESHARE, cbLen + dwDestHeaderSize - dwSrcHeaderSize);
 		if (hNewDib == NULL)
 		{
 			GlobalUnlock(hDib);
@@ -612,20 +623,28 @@ HANDLE CreateClipboardDib(HANDLE hDib, UINT *puFormat)
 		__try
 		{
 			CopyMemory(lpDest, lpSrc, sizeof(BITMAPINFOHEADER));
-			CopyMemory(lpDest + sizeof(BITMAPINFOHEADER), lpSrc + dwSrcHeaderSize, cbLen - dwSrcHeaderSize);
+			ZeroMemory(lpDest + sizeof(BITMAPINFOHEADER), dwDestHeaderSize - sizeof(BITMAPINFOHEADER));
+			CopyMemory(lpDest + dwDestHeaderSize, lpSrc + dwSrcHeaderSize, cbLen - dwSrcHeaderSize);
 
-			// Update the v3 header with the new header size
-			((LPBITMAPINFOHEADER)lpDest)->biSize = sizeof(BITMAPINFOHEADER);
+			// Update the v3 (or v5) header with the new header size
+			((LPBITMAPINFOHEADER)lpDest)->biSize = dwDestHeaderSize;
+
+			if (bForceDibV5)
+			{
+				((LPBITMAPV5HEADER)lpDest)->bV5Intent = LCS_GM_IMAGES;
+				((LPBITMAPV5HEADER)lpDest)->bV5CSType = LCS_sRGB;
+			}
 		}
 		__except (EXCEPTION_EXECUTE_HANDLER) { ; }
 
 		GlobalUnlock(hNewDib);
 	}
-	else if (dwSrcHeaderSize == 52 || dwSrcHeaderSize == 56 || dwSrcHeaderSize == sizeof(BITMAPV4HEADER))
+	else if ((dwSrcHeaderSize > sizeof(BITMAPINFOHEADER) || bForceDibV5) && dwSrcHeaderSize < sizeof(BITMAPV5HEADER))
 	{
-		// Create a new DIBv5 from an extended DIBv3 or from a DIBv4
-		hNewDib = GlobalAlloc(GMEM_MOVEABLE | GMEM_ZEROINIT | GMEM_DDESHARE,
-			cbLen + sizeof(BITMAPV5HEADER) - dwSrcHeaderSize);
+		// Create a new DIBv5 from an extended DIBv3, a DIBv4 or, if requested, from a DIBv3
+		SIZE_T cbDibSize = sizeof(BITMAPV5HEADER) + PaletteSize((LPCSTR)lpSrc) + DibImageSize((LPCSTR)lpSrc);
+
+		hNewDib = GlobalAlloc(GMEM_MOVEABLE | GMEM_ZEROINIT | GMEM_DDESHARE, cbDibSize);
 		if (hNewDib == NULL)
 		{
 			GlobalUnlock(hDib);
@@ -642,13 +661,14 @@ HANDLE CreateClipboardDib(HANDLE hDib, UINT *puFormat)
 
 		__try
 		{
-			CopyMemory(lpDest, lpSrc, dwSrcHeaderSize);
-			CopyMemory(lpDest + sizeof(BITMAPV5HEADER), lpSrc + dwSrcHeaderSize, cbLen - dwSrcHeaderSize);
+			CopyMemory(lpDest, lpSrc, FindDibPalette((LPCSTR)lpSrc) - lpSrc);
+			CopyMemory(lpDest + sizeof(BITMAPV5HEADER), FindDibPalette((LPCSTR)lpSrc),
+				cbDibSize - sizeof(BITMAPV5HEADER));
 
 			// Update the v5 header with the new header size
 			((LPBITMAPV5HEADER)lpDest)->bV5Size = sizeof(BITMAPV5HEADER);
 			((LPBITMAPV5HEADER)lpDest)->bV5Intent = LCS_GM_IMAGES;
-			if (dwSrcHeaderSize == 52 || dwSrcHeaderSize == 56)
+			if (dwSrcHeaderSize < sizeof(BITMAPV4HEADER))
 				((LPBITMAPV5HEADER)lpDest)->bV5CSType = LCS_sRGB;
 		}
 		__except (EXCEPTION_EXECUTE_HANDLER) { ; }
@@ -728,7 +748,7 @@ HANDLE CreateClipboardDib(HANDLE hDib, UINT *puFormat)
 	if (puFormat != NULL)
 	{
 		*puFormat = CF_DIB;
-		if (dwSrcHeaderSize > sizeof(BITMAPINFOHEADER) && dwSrcHeaderSize != 64)
+		if (bForceDibV5 || (dwSrcHeaderSize > sizeof(BITMAPINFOHEADER) && dwSrcHeaderSize != 64))
 			*puFormat = CF_DIBV5;
 	}
 

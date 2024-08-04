@@ -74,9 +74,9 @@ HANDLE ConvertBitmapToDib(HBITMAP hBitmap, HDC hdc = NULL, WORD wBitCount = 0);
 // Creates a DIB from a clipboard DIB in which the profile data follows the bitmap bits
 HANDLE CreateDibFromClipboardDib(HANDLE hDib);
 
-// Creates a memory object from a given DIB, which can be placed on the clipboard.
-// Depending on the source DIB, a CF_DIB or CF_DIBV5 is created. The system can then
-// create the other formats itself. puFormat returns the format for SetClipboardData.
+// If puFormat is NULL or contains CF_DIB, a DIBv3 or DIBv5 is generated
+// depending on the source DIB. If puFormat contains CF_DIBV5, a DIBv5 is
+// always generated. puFormat receives the generated format on return.
 HANDLE CreateClipboardDib(HANDLE hDib, UINT* puFormat = NULL);
 
 // Creates a logical color palette from a given DIB.

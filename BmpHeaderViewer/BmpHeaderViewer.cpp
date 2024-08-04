@@ -647,8 +647,9 @@ INT_PTR CALLBACK HeaderViewerDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPA
 						if (!OpenClipboard(hDlg))
 							return FALSE;
 
-						UINT uFormat = 0;
 						// Determine the most descriptive clipboard format
+						// and avoid importing a synthesized format
+						UINT uFormat = 0;
 						while ((uFormat = EnumClipboardFormats(uFormat)))
 						{
 							if (uFormat == CF_DIB || uFormat == CF_DIBV5)
@@ -657,7 +658,7 @@ INT_PTR CALLBACK HeaderViewerDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPA
 
 						HANDLE hDib = GetClipboardData(uFormat);
 						if (hDib == NULL)
-						{ // You cannot paste a DIB section from another application
+						{
 							CloseClipboard();
 							TCHAR szText[512];
 							if (LoadString(g_hInstance, IDP_CLIPBOARD, szText, _countof(szText)) > 0)
@@ -762,8 +763,11 @@ INT_PTR CALLBACK HeaderViewerDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPA
 					if (hDib == NULL)
 						return FALSE;
 
-					UINT uFormat = CF_DIB;
+					// Create a DIBv3 or DIBv5 depending on the source DIB
+					UINT uFormat = CF_DIB; // Use CF_DIBV5 to force the generation of a DIBv5
 					HANDLE hNewDib = CreateClipboardDib(hDib, &uFormat);
+					if (hNewDib == NULL)
+						return FALSE;
 
 					if (!OpenClipboard(hDlg))
 					{
