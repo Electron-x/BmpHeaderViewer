@@ -181,7 +181,7 @@ HBITMAP CreatePremultipliedBitmap(HANDLE hDib)
 	BYTE cAlpha;
 	LPBYTE lpSrc, lpDest;
 	DWORD dwColor, dwRedMask, dwGreenMask, dwBlueMask, dwAlphaMask;
-	DWORD dwIncrement = WIDTHBYTES(lWidth * wBitCount);
+	ULONG ulIncrement = WIDTHBYTES(lWidth * wBitCount);
 	BOOL bHasVisiblePixels = FALSE;
 	BOOL bHasTransparentPixels = FALSE;
 
@@ -214,7 +214,7 @@ HBITMAP CreatePremultipliedBitmap(HANDLE hDib)
 		{
 			for (LONG h = 0; h < lHeight; h++)
 			{
-				lpSrc = lpDIB + (ULONG_PTR)h * dwIncrement;
+				lpSrc = lpDIB + (ULONG_PTR)h * ulIncrement;
 				lpDest = lpBGRA + (ULONG_PTR)h * lWidth * 4;
 
 				for (LONG w = 0; w < lWidth; w++)
@@ -843,9 +843,13 @@ UINT DibNumColors(LPCSTR lpbi)
 
 UINT ColorMasksSize(LPCSTR lpbi)
 {
+	// In the case of an extended BITMAPINFOHEADER structure,
+	// the color masks are saved within the header
 	if (lpbi == NULL || !IS_WIN30_DIB(lpbi))
 		return 0;
 
+	// BI_BITFIELDS is only valid for 16-bpp and 32-bpp bitmaps.
+	// If set, however, we assume that the masks are present.
 	if (((LPBITMAPINFOHEADER)lpbi)->biCompression == BI_BITFIELDS)
 		return 3 * sizeof(DWORD);
 	else if (((LPBITMAPINFOHEADER)lpbi)->biCompression == BI_ALPHABITFIELDS)
@@ -866,7 +870,7 @@ UINT PaletteSize(LPCSTR lpbi)
 
 ////////////////////////////////////////////////////////////////////////////////////////////////
 
-UINT DibImageSize(LPCSTR lpbi, BOOL bCalculate)
+UINT DibImageSize(LPCSTR lpbi)
 {
 	if (lpbi == NULL)
 		return 0;
@@ -874,15 +878,19 @@ UINT DibImageSize(LPCSTR lpbi, BOOL bCalculate)
 	if (IS_OS2PM_DIB(lpbi))
 	{
 		LPBITMAPCOREHEADER lpbc = (LPBITMAPCOREHEADER)lpbi;
-		return WIDTHBYTES(lpbc->bcWidth * lpbc->bcPlanes * lpbc->bcBitCount) * lpbc->bcHeight;
+		UINT64 ullBitsSize = WIDTHBYTES((UINT64)lpbc->bcWidth * lpbc->bcPlanes * lpbc->bcBitCount) * lpbc->bcHeight;
+		return (ullBitsSize <= UINT_MAX ? (UINT)ullBitsSize : 0);
 	}
 
 	LPBITMAPINFOHEADER lpbih = (LPBITMAPINFOHEADER)lpbi;
 
-	if (lpbih->biSizeImage && (!bCalculate || DibIsCompressed(lpbi)))
-		return lpbih->biSizeImage;
+	if (!DibIsCompressed(lpbi))
+	{
+		UINT64 ullBitsSize = WIDTHBYTES((UINT64)abs(lpbih->biWidth) * lpbih->biPlanes * lpbih->biBitCount) * abs(lpbih->biHeight);
+		return (ullBitsSize <= UINT_MAX ? (UINT)ullBitsSize : 0);
+	}
 
-	return WIDTHBYTES(abs(lpbih->biWidth) * lpbih->biPlanes * lpbih->biBitCount) * abs(lpbih->biHeight);
+	return lpbih->biSizeImage;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////

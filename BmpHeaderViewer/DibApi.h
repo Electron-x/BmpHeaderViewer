@@ -92,10 +92,10 @@ UINT ColorMasksSize(LPCSTR lpbi);
 // Gets the size required to store the DIBs color table
 UINT PaletteSize(LPCSTR lpbi);
 
-// Gets the size of the DIBs bitmap bits. If bCalculate is TRUE,
-// a set value of biSizeImage is ignored for uncompressed DIBs
-// and the calculated bitmap size is returned.
-UINT DibImageSize(LPCSTR lpbi, BOOL bCalculate = FALSE);
+// Gets the size of the DIBs bitmap bits. For uncompressed bitmaps,
+// this function calculates the size from the individual header entries.
+// The value in biSizeImage is only returned for compressed bitmaps.
+UINT DibImageSize(LPCSTR lpbi);
 
 // Gets the offset from the beginning of the DIB to the bitmap bits
 UINT DibBitsOffset(LPCSTR lpbi);

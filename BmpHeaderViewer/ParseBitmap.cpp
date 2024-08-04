@@ -266,7 +266,8 @@ BOOL ParseDIBitmap(HWND hDlg, HANDLE hDib, DWORD dwOffBits)
 		// Perform some additional sanity checks
 		if (lpbih->bV5Width < 0)
 			lpbih->bV5Width = -lpbih->bV5Width;
-		UINT64 ullBitsSize = WIDTHBYTES((INT64)lpbih->bV5Width * lpbih->bV5Planes * lpbih->bV5BitCount) * abs(lpbih->bV5Height);
+		// We don't fix biPlanes to 1 because GDI still takes this value into account
+		UINT64 ullBitsSize = WIDTHBYTES((UINT64)lpbih->bV5Width * lpbih->bV5Planes * lpbih->bV5BitCount) * abs(lpbih->bV5Height);
 		if ((lpbih->bV5BitCount && ullBitsSize == 0) || ullBitsSize > 0x80000000L)
 			bIsDibDisplayable = FALSE;
 
@@ -363,7 +364,11 @@ BOOL ParseDIBitmap(HWND hDlg, HANDLE hDib, DWORD dwOffBits)
 			((UINT64)lpbih->bV5SizeImage - ullBitsSize) != 0 &&
 			(lpbih->bV5Compression == BI_RGB || lpbih->bV5Compression == BI_BITFIELDS ||
 			lpbih->bV5Compression == BI_ALPHABITFIELDS || lpbih->bV5Compression == BI_CMYK))
+		{
 			OutputTextFmt(hwndEdit, TEXT(" (%+lld bytes)"), (UINT64)lpbih->bV5SizeImage - ullBitsSize);
+			// Adjust biSizeImage to the calculated value
+			lpbih->bV5SizeImage = (DWORD)ullBitsSize;
+		}
 		OutputText(hwndEdit, TEXT("\r\n"));
 
 		OutputTextFmt(hwndEdit, TEXT("XPelsPerMeter:\t%d"), lpbih->bV5XPelsPerMeter);
@@ -738,7 +743,7 @@ BOOL ParseDIBitmap(HWND hDlg, HANDLE hDib, DWORD dwOffBits)
 	// Check whether the bitmap is cropped. An existing color profile is not
 	// taken into account. As the calculation requires correctly set header data
 	// and an actual error can usually be caught, only a message is displayed.
-	if (((dwOffBits != 0 ? dwOffBits : dwOffBitsPacked) + DibImageSize(lpbi, TRUE)) > dwDibSize)
+	if (((dwOffBits != 0 ? dwOffBits : dwOffBitsPacked) + DibImageSize(lpbi)) > dwDibSize)
 		OutputTextFromID(hwndEdit, IDS_CORRUPTED);
 
 	// Output the ICC profile data
@@ -1115,7 +1120,7 @@ void PrintProfileTagData(HWND hwndEdit, LPCTSTR lpszName, LPCSTR lpData, DWORD d
 	// OUTPUT_LEN. Otherwise OutputTextFmt would cut off the text.
 	SIZE_T cchMaxLen = OUTPUT_LEN - 39;
 	if (lpszName != NULL)
-		cchMaxLen -= _tcslen(lpszName);
+		cchMaxLen -= min(cchMaxLen, _tcslen(lpszName));
 
 	// Retrieve the tag type signature
 	DWORD dwSignature = _byteswap_ulong(*(LPDWORD)lpData);
@@ -1184,19 +1189,19 @@ void PrintProfileTagData(HWND hwndEdit, LPCTSTR lpszName, LPCSTR lpData, DWORD d
 					UINT cchWideLen = MultiByteToWideChar(CP_UTF8, 0, lpData + 8, cbMultiLen, NULL, 0);
 					if (cchWideLen > 0)
 					{
-						LPWSTR pszWide = (LPWSTR)MyGlobalAllocPtr(GHND, cchWideLen + sizeof(WCHAR));
-						if (pszWide != NULL)
+						LPWSTR pwszWide = (LPWSTR)MyGlobalAllocPtr(GHND, cchWideLen + sizeof(WCHAR));
+						if (pwszWide != NULL)
 						{
 							// Convert the UTF-8 string to Unicode UTF-16
-							MultiByteToWideChar(CP_UTF8, 0, lpData + 8, cbMultiLen, pszWide, cchWideLen);
+							MultiByteToWideChar(CP_UTF8, 0, lpData + 8, cbMultiLen, pwszWide, cchWideLen);
 
-							if (wcspbrk((PCWSTR)pszWide, L"\r\n") == NULL)
+							if (wcspbrk((PCWSTR)pwszWide, L"\r\n") == NULL)
 							{
 								if (lpszName != NULL)
 									OutputText(hwndEdit, lpszName);
-								OutputText(hwndEdit, pszWide);
+								OutputText(hwndEdit, pwszWide);
 							}
-							MyGlobalFreePtr(pszWide);
+							MyGlobalFreePtr(pwszWide);
 						}
 					}
 				}
@@ -1209,23 +1214,23 @@ void PrintProfileTagData(HWND hwndEdit, LPCTSTR lpszName, LPCSTR lpData, DWORD d
 				UINT cbStringLen = _byteswap_ulong(*(LPDWORD)(lpData + 20));
 				if (cbStringLen > 0 && (cbStringLen / sizeof(WCHAR)) <= cchMaxLen)
 				{
-					LPCWSTR pszSrc = (LPCWSTR)(lpData + _byteswap_ulong(*(LPDWORD)(lpData + 24)));
-					LPWSTR pszDest = (LPWSTR)MyGlobalAllocPtr(GHND, cbStringLen + sizeof(WCHAR));
-					if (pszDest != NULL)
+					LPCWSTR pwszSrc = (LPCWSTR)(lpData + _byteswap_ulong(*(LPDWORD)(lpData + 24)));
+					LPWSTR pwszDest = (LPWSTR)MyGlobalAllocPtr(GHND, cbStringLen + sizeof(WCHAR));
+					if (pwszDest != NULL)
 					{
 						// Convert the Unicode string from BE to LE
 						UINT cchStringLen = cbStringLen / sizeof(WCHAR);
 						for (UINT i = 0; i < cchStringLen; i++)
-							_sntprintf(pszDest, cchStringLen, TEXT("%s%c"), pszDest, _byteswap_ushort(pszSrc[i]));
-						pszDest[cchStringLen] = L'\0';
+							_sntprintf(pwszDest, cchStringLen, TEXT("%s%c"), pwszDest, _byteswap_ushort(pwszSrc[i]));
+						pwszDest[cchStringLen] = L'\0';
 
-						if (wcspbrk((PCWSTR)pszDest, L"\r\n") == NULL)
+						if (wcspbrk((PCWSTR)pwszDest, L"\r\n") == NULL)
 						{
 							if (lpszName != NULL)
 								OutputText(hwndEdit, lpszName);
-							OutputText(hwndEdit, pszDest);
+							OutputText(hwndEdit, pwszDest);
 						}
-						MyGlobalFreePtr(pszDest);
+						MyGlobalFreePtr(pwszDest);
 					}
 				}
 			}
