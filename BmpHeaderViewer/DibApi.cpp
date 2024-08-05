@@ -994,8 +994,8 @@ BOOL DibIsCompressed(LPCSTR lpbi)
 
 	DWORD dwCompression = ((LPBITMAPINFOHEADER)lpbi)->biCompression;
 
-	if (*(LPDWORD)lpbi == sizeof(BITMAPINFOHEADER2))
-		return (dwCompression != BCA_UNCOMP);
+	if (*(LPDWORD)lpbi == 64) // sizeof(BITMAPINFOHEADER2)
+		return (dwCompression != 0L); // BCA_UNCOMP
 
 	return (dwCompression != BI_RGB &&
 		dwCompression != BI_BITFIELDS &&
