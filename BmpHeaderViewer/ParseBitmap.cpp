@@ -268,6 +268,7 @@ BOOL ParseDIBitmap(HWND hDlg, HANDLE hDib, DWORD dwOffBits)
 			lpbih->bV5Width = -lpbih->bV5Width;
 		// We don't fix biPlanes to 1 because GDI still takes this value into account
 		UINT64 ullBitsSize = WIDTHBYTES((UINT64)lpbih->bV5Width * lpbih->bV5Planes * lpbih->bV5BitCount) * abs(lpbih->bV5Height);
+		// biBitCount is 0 for passthrough bitmaps (BI_JPEG, BI_PNG)
 		if ((lpbih->bV5BitCount && ullBitsSize == 0) || ullBitsSize > 0x80000000L)
 			bIsDibDisplayable = FALSE;
 
@@ -361,9 +362,7 @@ BOOL ParseDIBitmap(HWND hDlg, HANDLE hDib, DWORD dwOffBits)
 		// For uncompressed bitmaps, check whether the value of biSizeImage matches
 		// the calculated size (e.g. Adobe Photoshop adds two padding bytes)
 		if (lpbih->bV5SizeImage && ullBitsSize && ullBitsSize <= 0xFFFFFFFF &&
-			((UINT64)lpbih->bV5SizeImage - ullBitsSize) != 0 &&
-			(lpbih->bV5Compression == BI_RGB || lpbih->bV5Compression == BI_BITFIELDS ||
-			lpbih->bV5Compression == BI_ALPHABITFIELDS || lpbih->bV5Compression == BI_CMYK))
+			((UINT64)lpbih->bV5SizeImage - ullBitsSize) != 0 && !DibIsCompressed(lpbi))
 		{
 			OutputTextFmt(hwndEdit, TEXT(" (%+lld bytes)"), (UINT64)lpbih->bV5SizeImage - ullBitsSize);
 			// Adjust biSizeImage to the calculated value
@@ -740,11 +739,13 @@ BOOL ParseDIBitmap(HWND hDlg, HANDLE hDib, DWORD dwOffBits)
 		}
 	}
 
-	// Check whether the bitmap is cropped. An existing color profile is not
-	// taken into account. As the calculation requires correctly set header data
-	// and an actual error can usually be caught, only a message is displayed.
+	// Check whether the bitmap bits are cropped
 	if (((dwOffBits != 0 ? dwOffBits : dwOffBitsPacked) + DibImageSize(lpbi)) > dwDibSize)
+	{
+		GlobalUnlock(hDib);
 		OutputTextFromID(hwndEdit, IDS_CORRUPTED);
+		return FALSE;
+	}
 
 	// Output the ICC profile data
 	if (DibHasColorProfile(lpbi))
