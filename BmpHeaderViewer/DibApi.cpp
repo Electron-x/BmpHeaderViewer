@@ -145,7 +145,7 @@ HBITMAP CreatePremultipliedBitmap(HANDLE hDib)
 	LPBITMAPCOREHEADER lpbc = (LPBITMAPCOREHEADER)lpbi;
 	BOOL bIsCore = IS_OS2PM_DIB(lpbi);
 	WORD wBitCount = bIsCore ? lpbc->bcBitCount : lpbi->biBitCount;
-	BOOL bIs16Bit = (wBitCount == 16);
+	BOOL bIs16Bpp = (wBitCount == 16);
 
 	if ((wBitCount != 16 && wBitCount != 32) ||
 		(lpbi->biSize >= sizeof(BITMAPINFOHEADER) &&
@@ -197,7 +197,7 @@ HBITMAP CreatePremultipliedBitmap(HANDLE hDib)
 			dwBlueMask  = lpdwColorMasks[2];
 			dwAlphaMask = lpbi->biSize >= 56 ? lpdwColorMasks[3] : 0;
 		}
-		else if (bIs16Bit)
+		else if (bIs16Bpp)
 		{
 			dwRedMask   = 0x00007C00;
 			dwGreenMask = 0x000003E0;
@@ -222,7 +222,7 @@ HBITMAP CreatePremultipliedBitmap(HANDLE hDib)
 				for (LONG w = 0; w < lWidth; w++)
 				{
 					dwColor = MAKELONG(MAKEWORD(lpSrc[0], lpSrc[1]),
-						bIs16Bit ? 0 : MAKEWORD(lpSrc[2], lpSrc[3]));
+						bIs16Bpp ? 0 : MAKEWORD(lpSrc[2], lpSrc[3]));
 					cAlpha = GetColorValue(dwColor, dwAlphaMask);
 
 					if (cAlpha != 0x00)
@@ -235,7 +235,7 @@ HBITMAP CreatePremultipliedBitmap(HANDLE hDib)
 					*lpDest++ = Mul8Bit(GetColorValue(dwColor, dwRedMask), cAlpha);
 					*lpDest++ = cAlpha;
 
-					lpSrc += bIs16Bit ? 2 : 4;
+					lpSrc += bIs16Bpp ? 2 : 4;
 				}
 			}
 		}
@@ -610,7 +610,7 @@ HANDLE CreateClipboardDib(HANDLE hDib, UINT *puFormat)
 
 		GlobalUnlock(hNewDib);
 	}
-	else if (dwSrcHeaderSize == 64)
+	else if (dwSrcHeaderSize == sizeof(BITMAPINFOHEADER2))
 	{
 		// Create a new DIBv3 (or DIBv5) from an OS/2 2.0 DIB
 		hNewDib = GlobalAlloc(GMEM_MOVEABLE | GMEM_DDESHARE, cbLen + dwDestHeaderSize - dwSrcHeaderSize);
@@ -756,7 +756,7 @@ HANDLE CreateClipboardDib(HANDLE hDib, UINT *puFormat)
 	if (puFormat != NULL)
 	{
 		*puFormat = CF_DIB;
-		if (bForceDibV5 || (dwSrcHeaderSize > sizeof(BITMAPINFOHEADER) && dwSrcHeaderSize != 64))
+		if (bForceDibV5 || (dwSrcHeaderSize > sizeof(BITMAPINFOHEADER) && dwSrcHeaderSize != sizeof(BITMAPINFOHEADER2)))
 			*puFormat = CF_DIBV5;
 	}
 
@@ -994,12 +994,13 @@ BOOL DibIsCompressed(LPCSTR lpbi)
 
 	DWORD dwCompression = ((LPBITMAPINFOHEADER)lpbi)->biCompression;
 
-	if (*(LPDWORD)lpbi == 64) // sizeof(BITMAPINFOHEADER2)
-		return (dwCompression != 0L); // BCA_UNCOMP
+	if (IS_OS2V2_DIB(lpbi))
+		return (dwCompression != BCA_UNCOMP);
 
 	return (dwCompression != BI_RGB &&
 		dwCompression != BI_BITFIELDS &&
-		dwCompression != BI_ALPHABITFIELDS);
+		dwCompression != BI_ALPHABITFIELDS &&
+		dwCompression != BI_CMYK);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1021,10 +1022,16 @@ BOOL DibIsCustomFormat(LPCSTR lpbi)
 
 BOOL DibIsCMYK(LPCSTR lpbi)
 {
-	if (lpbi == NULL || *(LPDWORD)lpbi < sizeof(BITMAPV4HEADER))
+	if (lpbi == NULL)
 		return FALSE;
 
-	return (((LPBITMAPV4HEADER)lpbi)->bV4CSType == LCS_DEVICE_CMYK);
+	DWORD dwSize = *(LPDWORD)lpbi;
+
+	if ((dwSize >= sizeof(BITMAPV4HEADER) && ((LPBITMAPV4HEADER)lpbi)->bV4CSType == LCS_DEVICE_CMYK) ||
+		(dwSize >= sizeof(BITMAPINFOHEADER) && ((LPBITMAPINFOHEADER)lpbi)->biCompression == BI_CMYK))
+		return TRUE;
+
+	return FALSE;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////

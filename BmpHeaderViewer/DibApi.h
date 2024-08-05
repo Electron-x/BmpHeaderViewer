@@ -16,18 +16,132 @@
 //
 ////////////////////////////////////////////////////////////////////////////////////////////////
 
-#define BFT_BITMAP          0x4d42 // 'BM'
 #define PALVERSION          0x300
+#define BFT_BITMAP          0x4d42      // 'BM'
 
-#ifndef BI_ALPHABITFIELDS
-#define BI_ALPHABITFIELDS   6L
-#endif
+#define BI_BGRA             5L          // Windows NT 5 Beta only
+#define BI_ALPHABITFIELDS   6L          // Unlike documented, this value is valid under Windows CE 3.0+
+#define BI_FOURCC           7L          // Windows Mobile 5.0+, Windows CE 6.0+
+
+#define BI_CMYK             10L         // GDI internal. The value in [MS-WMF] appears to be incorrect.
+#define BI_CMYKRLE8         11L         // GDI internal. The value in [MS-WMF] appears to be incorrect.
+#define BI_CMYKRLE4         12L         // GDI internal. The value in [MS-WMF] appears to be incorrect.
+
+#define BI_SRCPREROTATE     0x8000      // Windows Mobile 5.0+, Windows CE 6.0+
+
 #ifndef LCS_DEVICE_RGB
-#define LCS_DEVICE_RGB      0x00000001L
+#define LCS_DEVICE_RGB                  0x00000001L // Obsolete
 #endif
 #ifndef LCS_DEVICE_CMYK
-#define LCS_DEVICE_CMYK     0x00000002L
+#define LCS_DEVICE_CMYK                 0x00000002L // Obsolete
 #endif
+
+#ifndef LCS_GM_ABS_COLORIMETRIC
+#define LCS_GM_ABS_COLORIMETRIC         0x00000008L
+#endif
+
+////////////////////////////////////////////////////////////////////////////////////////////////
+// OS/2 Presentation Manager Bitmap type declarations
+
+#define BFT_BITMAPARRAY     0x4142 // 'BA'
+#define BFT_BMAP            0x4d42 // 'BM'
+
+#define BCA_UNCOMP          0L
+#define BCA_RLE8            1L
+#define BCA_RLE4            2L
+#define BCA_HUFFMAN1D       3L
+#define BCA_RLE24           4L
+
+#define BRU_METRIC          0L
+
+#define BRA_BOTTOMUP        0L
+
+#define BRH_NOTHALFTONED    0L
+#define BRH_ERRORDIFFUSION  1L
+#define BRH_PANDA           2L
+#define BRH_SUPERCIRCLE     3L
+
+#define BCE_PALETTE         (-1L)
+#define BCE_RGB             0L
+
+#pragma pack(push,1)
+
+typedef struct _BITMAPARRAYFILEHEADER
+{
+    USHORT usType;
+    ULONG  cbSize;
+    ULONG  offNext;
+    USHORT cxDisplay;
+    USHORT cyDisplay;
+    BITMAPFILEHEADER bfh;
+} BITMAPARRAYFILEHEADER, FAR* LPBITMAPARRAYFILEHEADER, * PBITMAPARRAYFILEHEADER;
+
+typedef struct _BITMAPINFOHEADER2
+{
+    ULONG  cbFix;
+    ULONG  cx;
+    ULONG  cy;
+    USHORT cPlanes;
+    USHORT cBitCount;
+    ULONG  ulCompression;
+    ULONG  cbImage;
+    ULONG  cxResolution;
+    ULONG  cyResolution;
+    ULONG  cclrUsed;
+    ULONG  cclrImportant;
+    USHORT usUnits;
+    USHORT usReserved;
+    USHORT usRecording;
+    USHORT usRendering;
+    ULONG  cSize1;
+    ULONG  cSize2;
+    ULONG  ulColorEncoding;
+    ULONG  ulIdentifier;
+} BITMAPINFOHEADER2, FAR* LPBITMAPINFOHEADER2, * PBITMAPINFOHEADER2;
+
+#pragma pack(pop)
+
+////////////////////////////////////////////////////////////////////////////////////////////////
+// Adobe Photoshop bitmap header extensions
+
+typedef struct _BITMAPV2INFOHEADER
+{
+    DWORD  biSize;
+    LONG   biWidth;
+    LONG   biHeight;
+    WORD   biPlanes;
+    WORD   biBitCount;
+    DWORD  biCompression;
+    DWORD  biSizeImage;
+    LONG   biXPelsPerMeter;
+    LONG   biYPelsPerMeter;
+    DWORD  biClrUsed;
+    DWORD  biClrImportant;
+    DWORD  biRedMask;
+    DWORD  biGreenMask;
+    DWORD  biBlueMask;
+} BITMAPV2INFOHEADER, FAR* LPBITMAPV2INFOHEADER, * PBITMAPV2INFOHEADER;
+
+typedef struct _BITMAPV3INFOHEADER
+{
+    DWORD  biSize;
+    LONG   biWidth;
+    LONG   biHeight;
+    WORD   biPlanes;
+    WORD   biBitCount;
+    DWORD  biCompression;
+    DWORD  biSizeImage;
+    LONG   biXPelsPerMeter;
+    LONG   biYPelsPerMeter;
+    DWORD  biClrUsed;
+    DWORD  biClrImportant;
+    DWORD  biRedMask;
+    DWORD  biGreenMask;
+    DWORD  biBlueMask;
+    DWORD  biAlphaMask;
+} BITMAPV3INFOHEADER, FAR* LPBITMAPV3INFOHEADER, * PBITMAPV3INFOHEADER;
+
+////////////////////////////////////////////////////////////////////////////////////////////////
 
 // WIDTHBYTES returns the number of DWORD-aligned bytes needed to
 // hold the bit count of a DIB scanline (biWidth * biBitCount)
@@ -37,6 +151,9 @@
 #define IS_WIN30_DIB(lpbi)  ((*(LPDWORD)(lpbi)) == sizeof(BITMAPINFOHEADER))
 #define IS_WIN40_DIB(lpbi)  ((*(LPDWORD)(lpbi)) == sizeof(BITMAPV4HEADER))
 #define IS_WIN50_DIB(lpbi)  ((*(LPDWORD)(lpbi)) == sizeof(BITMAPV5HEADER))
+#define IS_OS2V2_DIB(lpbi)  ((*(LPDWORD)(lpbi)) == sizeof(BITMAPINFOHEADER2))
+
+////////////////////////////////////////////////////////////////////////////////////////////////
 
 // Incorporating rounding, Mul8Bit is an approximation of a * b / 255 for values in the
 // range [0...255]. For details, see the documentation of the DrvAlphaBlend function.
@@ -49,7 +166,7 @@ BOOL SaveBitmap(LPCTSTR lpszFileName, HANDLE hDib);
 // Saves the embedded profile of a DIB in an ICC color profile file
 BOOL SaveProfile(LPCTSTR lpszFileName, HANDLE hDib);
 
-// Creates a 32-bit DIB with pre-multiplied alpha from a translucent 16/32-bit DIB
+// Creates a 32-bpp DIB with pre-multiplied alpha from a translucent 16/32-bpp DIB
 HBITMAP CreatePremultipliedBitmap(HANDLE hDib);
 
 // Frees the memory allocated for a DIB section using DeleteObject
