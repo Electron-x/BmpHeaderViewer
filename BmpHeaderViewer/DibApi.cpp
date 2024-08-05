@@ -25,6 +25,8 @@
 BYTE GetColorValue(DWORD dwPixel, DWORD dwMask);
 
 ////////////////////////////////////////////////////////////////////////////////////////////////
+// SaveBitmap saves the DIB as it is. For example, an ICC profile
+// behind the color table will not be moved behind the bitmap bits.
 
 BOOL SaveBitmap(LPCTSTR lpszFileName, HANDLE hDib)
 {
@@ -453,6 +455,10 @@ HANDLE ConvertBitmapToDib(HBITMAP hBitmap, HDC hdc, WORD wBitCount)
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////
+// CreateDibFromClipboardDib creates a DIB from a clipboard DIB in which the
+// profile data follows the bitmap bits. It does not fix an incorrectly synthesized
+// DIBv5 (see comment on the CreateClipboardDib function). The application should
+// use EnumClipboardFormats to determine the most descriptive clipboard format.
 
 HANDLE CreateDibFromClipboardDib(HANDLE hDib)
 {
@@ -470,7 +476,7 @@ HANDLE CreateDibFromClipboardDib(HANDLE hDib)
 	if (!DibHasColorProfile((LPCSTR)lpSrc))
 	{
 		GlobalUnlock(hDib);
-		// Nothing to fix. Just copy the DIB.
+		// No profile needs to be moved. Just copy the DIB.
 		return CopyDib(hDib);
 	}
 
@@ -520,9 +526,11 @@ HANDLE CreateDibFromClipboardDib(HANDLE hDib)
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////
-// It looks like Windows still has the problem of synthesizing a valid DIBv5 from an RLE-compressed
-// DIBv3 or from a DIBv3 with color masks. In such a case, the second parameter of this function
-// can be used to force the creation of a DIBv5. This DIB can then also be placed on the clipboard.
+// CreateClipboardDib creates the most descriptive clipboard format from the passed DIB.
+// The system can then generate the other formats itself. But it looks like Windows still
+// has the problem of synthesizing a valid DIBv5 from an RLE-compressed DIBv3 or from a
+// DIBv3 with color masks. In such a case, the second parameter of this function can be
+// used to force the creation of a DIBv5. This DIB can then also be placed on the clipboard.
 
 HANDLE CreateClipboardDib(HANDLE hDib, UINT *puFormat)
 {
@@ -985,6 +993,9 @@ BOOL DibIsCompressed(LPCSTR lpbi)
 		return FALSE;
 
 	DWORD dwCompression = ((LPBITMAPINFOHEADER)lpbi)->biCompression;
+
+	if (*(LPDWORD)lpbi == sizeof(BITMAPINFOHEADER2))
+		return (dwCompression != BCA_UNCOMP);
 
 	return (dwCompression != BI_RGB &&
 		dwCompression != BI_BITFIELDS &&
