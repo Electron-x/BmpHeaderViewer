@@ -666,6 +666,8 @@ INT_PTR CALLBACK HeaderViewerDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPA
 							return FALSE;
 						}
 
+						// Create a DIB in which the profile data follows the bitmap bits. Actually,
+						// we should now simply copy the DIB and move the profile just before saving.
 						HANDLE hNewDib = CreateDibFromClipboardDib(hDib);
 						if (hNewDib == NULL)
 						{
@@ -803,8 +805,7 @@ INT_PTR CALLBACK HeaderViewerDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPA
 						LPBITMAPV5HEADER lpbiv5 = (LPBITMAPV5HEADER)GlobalLock(g_hDibThumb);
 						if (lpbiv5 != NULL)
 						{
-							if (IS_WIN50_DIB(lpbiv5) && lpbiv5->bV5CSType == PROFILE_EMBEDDED &&
-								lpbiv5->bV5ProfileData != 0 && lpbiv5->bV5ProfileSize != 0)
+							if (DibHasEmbeddedProfile((LPCSTR)lpbiv5))
 								dwFilterIndex = 2;	// Add the option to save the ICC profile
 							GlobalUnlock(g_hDibThumb);
 						}
@@ -1651,6 +1652,8 @@ BOOL DrawDib(HDC hdc, LPBITMAPINFOHEADER lpbi, int xDest, int yDest, int wDest, 
 	if (hdc == NULL || lpbi == NULL)
 		return FALSE;
 
+	// Turn on ICM inside DC. When activated, there seem to be
+	// problems when printing larger images with a color profile.
 	SetICMMode(hdc, g_nIcmMode);
 
 	POINT pt = { 0 };

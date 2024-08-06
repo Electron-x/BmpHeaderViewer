@@ -100,8 +100,7 @@ BOOL SaveProfile(LPCTSTR lpszFileName, HANDLE hDib)
 	if (lpbiv5 == NULL)
 		return FALSE;
 
-	if (!IS_WIN50_DIB(lpbiv5) || lpbiv5->bV5CSType != PROFILE_EMBEDDED ||
-		lpbiv5->bV5ProfileData == 0 || lpbiv5->bV5ProfileSize == 0)
+	if (!DibHasEmbeddedProfile((LPCSTR)lpbiv5))
 	{
 		GlobalUnlock(hDib);
 		return FALSE;
@@ -195,7 +194,7 @@ HBITMAP CreatePremultipliedBitmap(HANDLE hDib)
 			dwRedMask   = lpdwColorMasks[0];
 			dwGreenMask = lpdwColorMasks[1];
 			dwBlueMask  = lpdwColorMasks[2];
-			dwAlphaMask = lpbi->biSize >= 56 ? lpdwColorMasks[3] : 0;
+			dwAlphaMask = lpbi->biSize >= sizeof(BITMAPV3INFOHEADER) ? lpdwColorMasks[3] : 0;
 		}
 		else if (bIs16Bpp)
 		{
@@ -455,7 +454,7 @@ HANDLE ConvertBitmapToDib(HBITMAP hBitmap, HDC hdc, WORD wBitCount)
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////
-// CreateDibFromClipboardDib creates a DIB from a clipboard DIB in which the
+// CreateDibFromClipboardDib creates a DIB from a clipboard/memory DIB in which the
 // profile data follows the bitmap bits. It does not fix an incorrectly synthesized
 // DIBv5 (see comment on the CreateClipboardDib function). The application should
 // use EnumClipboardFormats to determine the most descriptive clipboard format.
@@ -956,6 +955,18 @@ LPBYTE FindDibBits(LPCSTR lpbi)
 		return NULL;
 
 	return (LPBYTE)lpbi + DibBitsOffset(lpbi);
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////
+
+BOOL DibHasEmbeddedProfile(LPCSTR lpbi)
+{
+	if (lpbi == NULL || !IS_WIN50_DIB(lpbi))
+		return FALSE;
+
+	LPBITMAPV5HEADER lpbiv5 = (LPBITMAPV5HEADER)lpbi;
+	return (lpbiv5->bV5ProfileData != 0 && lpbiv5->bV5ProfileSize != 0 &&
+		lpbiv5->bV5CSType == PROFILE_EMBEDDED);
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////

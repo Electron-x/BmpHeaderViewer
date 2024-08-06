@@ -223,6 +223,9 @@ LPBYTE FindDibPalette(LPCSTR lpbi);
 // Returns a pointer to the pixel bits of a packed DIB
 LPBYTE FindDibBits(LPCSTR lpbi);
 
+// Checks if the DIBv5 has an embedded ICC profile
+BOOL DibHasEmbeddedProfile(LPCSTR lpbi);
+
 // Checks if the DIBv5 has a linked or embedded ICC profile
 BOOL DibHasColorProfile(LPCSTR lpbi);
 
@@ -238,10 +241,10 @@ BOOL DibIsCustomFormat(LPCSTR lpbi);
 // Checks whether the DIB uses the CMYK color model
 BOOL DibIsCMYK(LPCSTR lpbi);
 
-// Determines whether a device can draw a specific DIB
+// Determines whether the display device can draw a specific DIB
 BOOL IsDibSupported(LPCSTR lpbi);
 
-// Determines whether a device supports a specific DIB
+// Determines whether the display device supports a specific DIB
 DWORD QueryDibSupport(LPCSTR lpbi);
 
 ////////////////////////////////////////////////////////////////////////////////////////////////
