@@ -375,6 +375,24 @@ LPTSTR AllocReplaceString(LPCTSTR lpszOriginal, LPCTSTR lpszPattern, LPCTSTR lps
 
 ////////////////////////////////////////////////////////////////////////////////////////////////
 
+LPCTSTR FindFileName(LPCTSTR lpszPath)
+{
+	if (lpszPath == NULL)
+		return NULL;
+
+	LPCTSTR lpszFileName = _tcsrchr(lpszPath, TEXT('\\'));
+	if (lpszFileName == NULL)
+		lpszFileName = _tcsrchr(lpszPath, TEXT('/'));
+	if (lpszFileName != NULL && *(lpszFileName + 1) != TEXT('\0'))
+		lpszFileName++;
+	else
+		lpszFileName = lpszPath;
+
+	return lpszFileName;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////
+
 SIZE_T ShortenPath(LPCTSTR lpszLongPath, LPTSTR lpszShortPath, SIZE_T cchBuffer)
 {
 	if (lpszShortPath == NULL || lpszLongPath == NULL || cchBuffer == 0)

@@ -94,6 +94,10 @@ BOOL FormatByteSize(DWORD dwSize, LPTSTR lpszString, SIZE_T cchStringLen);
 // The memory of the returned character string must be freed using MyGlobalFreePtr.
 LPTSTR AllocReplaceString(LPCTSTR lpszOriginal, LPCTSTR lpszPattern, LPCTSTR lpszReplacement);
 
+// Searches a path for a filename. If successful, returns a pointer to the address
+// of the string, otherwise returns a pointer to the beginning of the path.
+LPCTSTR FindFileName(LPCTSTR lpszPath);
+
 // Creates a form of the specified path with a length smaller than cchBuffer. For this purpose
 // the short path form is retrieved. If this is not successful, only the filename is returned.
 SIZE_T ShortenPath(LPCTSTR lpszLongPath, LPTSTR lpszShortPath, SIZE_T cchBuffer);

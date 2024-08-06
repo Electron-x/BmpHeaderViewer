@@ -667,7 +667,7 @@ INT_PTR CALLBACK HeaderViewerDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPA
 						}
 
 						// Create a DIB in which the profile data follows the bitmap bits. Actually,
-						// we should now simply copy the DIB and move the profile just before saving.
+						// we should now simply copy the DIB and move the profile while saving.
 						HANDLE hNewDib = CreateDibFromClipboardDib(hDib);
 						if (hNewDib == NULL)
 						{
@@ -747,15 +747,7 @@ INT_PTR CALLBACK HeaderViewerDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPA
 
 				case IDC_THUMB_PRINT:
 				{
-					LPCTSTR lpszDocName = _tcsrchr(s_szFileName, TEXT('\\'));
-					if (lpszDocName == NULL)
-						lpszDocName = _tcsrchr(s_szFileName, TEXT('/'));
-					if (lpszDocName != NULL && *(lpszDocName + 1) != TEXT('\0'))
-						lpszDocName++;
-					else
-						lpszDocName = s_szFileName;
-
-					PrintThumbnail(hDlg, lpszDocName);
+					PrintThumbnail(hDlg, FindFileName(s_szFileName));
 				}
 				return FALSE;
 
@@ -1241,11 +1233,7 @@ BOOL ParseFile(HWND hDlg, LPCTSTR lpszFileName)
 	ResetThumbnail(GetDlgItem(hDlg, IDC_THUMB));
 
 	// Output file name
-	LPCTSTR lpsz = _tcsrchr(lpszFileName, TEXT('\\'));
-	if (lpsz == NULL)
-		lpsz = _tcsrchr(lpszFileName, TEXT('/'));
-	OutputTextFmt(hwndEdit, TEXT("File Name:\t%s\r\n"),
-		lpsz != NULL && *(lpsz + 1) != TEXT('\0') ? lpsz + 1 : lpszFileName);
+	OutputTextFmt(hwndEdit, TEXT("File Name:\t%s\r\n"), FindFileName(lpszFileName));
 
 	// Obtain attribute information about the file
 	WIN32_FILE_ATTRIBUTE_DATA wfad = { 0 };
