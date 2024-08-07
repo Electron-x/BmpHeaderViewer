@@ -1640,9 +1640,29 @@ BOOL DrawDib(HDC hdc, LPBITMAPINFOHEADER lpbi, int xDest, int yDest, int wDest, 
 	if (hdc == NULL || lpbi == NULL)
 		return FALSE;
 
-	// Turn on ICM inside DC. When activated, there seem to be
-	// problems when printing larger images with a color profile.
-	SetICMMode(hdc, g_nIcmMode);
+	// Turn on ICM inside DC. When activated, there seem to be problems
+	// when printing large images with an embedded input color profile.
+	if (SetICMMode(hdc, g_nIcmMode) && g_nIcmMode == ICM_ON)
+	{
+		// A DC contains the output profile of the primary display. Check whether the application
+		// window is placed on a secondary monitor and set the corresponding color profile.
+		if (GetDeviceCaps(hdc, TECHNOLOGY) & DT_RASDISPLAY)
+		{
+			// TODO: Use the profiles set by the user in the Color Management UI
+			// instead of retrieving the global profiles each time when drawing.
+			HWND hWnd = WindowFromDC(hdc);
+			if (hWnd != NULL && IsWindow(hWnd))
+			{
+				HWND hwndThumb = GetDlgItem(hWnd, IDC_THUMB);
+				if (hwndThumb == NULL)
+					hwndThumb = hWnd;
+
+				TCHAR szProfile[MAX_PATH] = { 0 };
+				if (GetICMProfileFromWindow(hwndThumb, szProfile, _countof(szProfile)))
+					SetICMProfile(hdc, szProfile);
+			}
+		}
+	}
 
 	POINT pt = { 0 };
 	GetBrushOrgEx(hdc, &pt);
