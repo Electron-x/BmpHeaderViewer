@@ -533,6 +533,118 @@ BOOL GetFileName(HWND hDlg, LPTSTR lpszFileName, SIZE_T cchStringLen, LPDWORD lp
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////
+
+BOOL GetDeviceNameFromWindow(HWND hwnd, LPTSTR lpszDevice, SIZE_T cchLenOutput, DWORD dwFlags)
+{
+	if (hwnd == NULL || lpszDevice == NULL)
+		return FALSE;
+
+	MONITORINFOEX mi;
+	ZeroMemory(&mi, sizeof(mi));
+	mi.cbSize = sizeof(mi);
+
+	if (cchLenOutput < _countof(mi.szDevice))
+		return FALSE;
+
+	HMONITOR hMonitor = MonitorFromWindow(hwnd, dwFlags);
+	if (hMonitor == NULL)
+		return FALSE;
+
+	if (!GetMonitorInfo(hMonitor, &mi))
+		return FALSE;
+
+	MyStrNCpy(lpszDevice, mi.szDevice, (int)cchLenOutput);
+
+	return TRUE;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////
+
+BOOL GetDeviceIDFromDeviceName(LPCTSTR lpszDevice, LPTSTR lpszDeviceID, SIZE_T cchLenOutput)
+{
+	if (lpszDevice == NULL || lpszDeviceID == NULL)
+		return FALSE;
+
+	DISPLAY_DEVICE dd;
+	ZeroMemory(&dd, sizeof(dd));
+	dd.cb = sizeof(dd);
+
+	if (cchLenOutput < _countof(dd.DeviceID))
+		return FALSE;
+
+	int i = 0;
+	BOOL bSuccess = TRUE;
+	while (bSuccess)
+	{
+		bSuccess = EnumDisplayDevices(lpszDevice, i++, &dd, 0);
+		if (dd.StateFlags & DISPLAY_DEVICE_ACTIVE &&
+			dd.StateFlags & DISPLAY_DEVICE_ATTACHED)
+			break;
+	}
+
+	if (bSuccess)
+		MyStrNCpy(lpszDeviceID, dd.DeviceID, (int)cchLenOutput);
+
+	return bSuccess;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////
+
+BOOL GetICMProfileFromDevice(LPCTSTR lpszDevice, LPTSTR lpszProfile, SIZE_T cchLenOutput)
+{
+	if (lpszDevice == NULL || lpszProfile == NULL || cchLenOutput == 0)
+		return FALSE;
+
+	HDC hdcMonitor = CreateDC(TEXT("DISPLAY"), lpszDevice, NULL, NULL);
+	if (hdcMonitor == NULL)
+		return FALSE;
+
+	DWORD dwBufSize = (DWORD)cchLenOutput;
+	if (!GetICMProfile(hdcMonitor, &dwBufSize, lpszProfile))
+	{
+		DeleteDC(hdcMonitor);
+		return FALSE;
+	}
+
+	DeleteDC(hdcMonitor);
+	return TRUE;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////
+
+BOOL GetICMProfileFromWindow(HWND hWnd, LPTSTR lpszProfile, SIZE_T cchLenOutput)
+{
+	if (hWnd == NULL || lpszProfile == NULL || cchLenOutput == 0)
+		return FALSE;
+
+	TCHAR szDevice[CCHDEVICENAME] = { 0 };
+	if (!GetDeviceNameFromWindow(hWnd, szDevice, _countof(szDevice)))
+		return FALSE;
+
+	if (!GetICMProfileFromDevice(szDevice, lpszProfile, cchLenOutput))
+		return FALSE;
+
+	return TRUE;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////
+
+BOOL GetDeviceIDFromWindow(HWND hWnd, LPTSTR lpszDeviceID, SIZE_T cchLenOutput)
+{
+	if (hWnd == NULL || lpszDeviceID == NULL || cchLenOutput == 0)
+		return FALSE;
+
+	TCHAR szDevice[CCHDEVICENAME] = { 0 };
+	if (!GetDeviceNameFromWindow(hWnd, szDevice, _countof(szDevice)))
+		return FALSE;
+
+	if (!GetDeviceIDFromDeviceName(szDevice, lpszDeviceID, cchLenOutput))
+		return FALSE;
+
+	return TRUE;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////
 // Applies the color settings made in the Color Management dialog box
 //
 static BOOL ApplyColorSettings(PCOLORMATCHSETUP pcms)
@@ -580,6 +692,7 @@ static BOOL WINAPI ColorSetupApply(PCOLORMATCHSETUP pcms, LPARAM lParam)
 
 BOOL ColorMatchUI(HWND hDlg)
 {
+	// TODO: Add support for the selection of output color profiles
 	TCHAR szMonitorProfile[MAX_PATH + 1] = { 0 };
 	TCHAR szPrinterProfile[MAX_PATH + 1] = { 0 };
 	TCHAR szTargetProfile[MAX_PATH + 1] = { 0 };
@@ -630,37 +743,17 @@ BOOL ColorMatchUI(HWND hDlg)
 		}
 	}
 
-	MONITORINFOEX mi;
-	ZeroMemory(&mi, sizeof(mi));
-	mi.cbSize = sizeof(mi);
-
-	DISPLAY_DEVICE dd;
-	ZeroMemory(&dd, sizeof(dd));
-	dd.cb = sizeof(dd);
-
 	HWND hwndThumb = GetDlgItem(hDlg, IDC_THUMB);
 	if (hwndThumb == NULL)
 		hwndThumb = hDlg;
 
-	// Determine the device ID of the monitor on which the thumbnail is displayed
-	HMONITOR hMonitor = MonitorFromWindow(hwndThumb, MONITOR_DEFAULTTONEAREST);
-	if (hMonitor != NULL)
+	TCHAR szDeviceID[128] = { 0 };
+	if (GetDeviceIDFromWindow(hwndThumb, szDeviceID, _countof(szDeviceID)))
 	{
-		if (GetMonitorInfo(hMonitor, &mi))
-		{
-			int i = 0;
-			while (EnumDisplayDevices(mi.szDevice, i++, &dd, 0))
-			{
-				if (dd.StateFlags & DISPLAY_DEVICE_ACTIVE &&
-					dd.StateFlags & DISPLAY_DEVICE_ATTACHED)
-					break;
-			}
-		}
+		// Contrary to what the name and documentation
+		// suggest, this element expects a device ID
+		cms.pDisplayName = szDeviceID;
 	}
-
-	// Contrary to what the name and documentation
-	// suggest, this element expects a device ID
-	cms.pDisplayName = dd.DeviceID;
 
 	// Create the Color Management dialog box
 	SetLastError(ERROR_SUCCESS);

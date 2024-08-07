@@ -105,6 +105,21 @@ SIZE_T ShortenPath(LPCTSTR lpszLongPath, LPTSTR lpszShortPath, SIZE_T cchBuffer)
 // Displays the File Open or Save As dialog box
 BOOL GetFileName(HWND hDlg, LPTSTR lpszFileName, SIZE_T cchStringLen, LPDWORD lpdwFilterIndex, BOOL bSave = FALSE);
 
+// Retrieves the device name of the display monitor on which the specified window is displayed
+BOOL GetDeviceNameFromWindow(HWND hwnd, LPTSTR lpszDevice, SIZE_T cchLenOutput, DWORD dwFlags = MONITOR_DEFAULTTONEAREST);
+
+// Retrieves the device ID from a display's device name
+BOOL GetDeviceIDFromDeviceName(LPCTSTR lpszDevice, LPTSTR lpszDeviceID, SIZE_T cchLenOutput);
+
+// Retrieves the file name of the output color profile for the specified display device
+BOOL GetICMProfileFromDevice(LPCTSTR lpszDevice, LPTSTR lpszProfile, SIZE_T cchLenOutput);
+
+// Retrieves the file name of the color profile for the display device on which the specified window is displayed
+BOOL GetICMProfileFromWindow(HWND hWnd, LPTSTR lpszProfile, SIZE_T cchLenOutput);
+
+// Retrieves the device ID of the monitor on which the specified window is displayed
+BOOL GetDeviceIDFromWindow(HWND hWnd, LPTSTR lpszDeviceID, SIZE_T cchLenOutput);
+
 // Displays the Color Management dialog box
 BOOL ColorMatchUI(HWND hDlg);
 
