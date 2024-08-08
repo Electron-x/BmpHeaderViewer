@@ -136,7 +136,9 @@ BOOL ParseBitmap(HWND hDlg, HANDLE hFile, DWORD dwFileSize)
 		return FALSE;
 	}
 
-	// Read in the entire DIB
+	// We read in the DIB completely in order to analyze it. The
+	// header and the color table should actually be read in first,
+	// followed by the color profile and finally the bitmap bits.
 	if (!MyReadFile(hFile, lpbi, dwDibSize))
 	{
 		DWORD dwError = GetLastError();
@@ -1040,7 +1042,7 @@ BOOL ParseDIBitmap(HWND hDlg, HANDLE hDib, DWORD dwOffBits)
 			LPDWORD lpdwTags = lpdwTagTable + 1;
 
 			OutputText(hwndEdit, g_szSepThin);
-			OutputText(hwndEdit, TEXT("Sig. | Element Offset | Element Size |\r\n"));
+			OutputText(hwndEdit, TEXT("Sig. | Element Offset | Element Size | Element Data\r\n"));
 
 			while (dwTagCount--)
 			{
