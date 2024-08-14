@@ -160,7 +160,7 @@ typedef struct _BITMAPV3INFOHEADER
 __inline int Mul8Bit(int a, int b)
 { int t = a * b + 128; return (t + (t >> 8)) >> 8; }
 
-// Saves a DIB as a Windows Bitmap file
+// Saves a packed DIB as a Windows Bitmap file
 BOOL SaveBitmap(LPCTSTR lpszFileName, HANDLE hDib);
 
 // Saves the embedded profile of a DIB in an ICC color profile file
@@ -188,9 +188,7 @@ HANDLE ChangeDibBitDepth(HANDLE hDib, WORD wBitCount = 0);
 // This function takes a DC instead of a logical palette (as support for ChangeDibBitDepth).
 HANDLE ConvertBitmapToDib(HBITMAP hBitmap, HDC hdc = NULL, WORD wBitCount = 0);
 
-// Creates a DIB from a clipboard DIB in which the profile data follows the bitmap bits
-HANDLE CreateDibFromClipboardDib(HANDLE hDib);
-
+// Creates the most descriptive clipboard format from the passed DIB.
 // If puFormat is NULL or contains CF_DIB, a DIBv3 or DIBv5 is generated
 // depending on the source DIB. If puFormat contains CF_DIBV5, a DIBv5 is
 // always generated. puFormat receives the generated format on return.
