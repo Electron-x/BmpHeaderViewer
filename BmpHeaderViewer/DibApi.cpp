@@ -25,49 +25,67 @@
 BYTE GetColorValue(DWORD dwPixel, DWORD dwMask);
 
 ////////////////////////////////////////////////////////////////////////////////////////////////
-// SaveBitmap saves the DIB as it is. For example, an ICC profile
-// behind the color table will not be moved behind the bitmap bits.
 
 BOOL SaveBitmap(LPCTSTR lpszFileName, HANDLE hDib)
 {
 	if (hDib == NULL || lpszFileName == NULL)
 		return FALSE;
 
+	SIZE_T cbLen = GlobalSize(hDib);
+	if (cbLen < sizeof(BITMAPCOREHEADER))
+		return FALSE;
+
 	LPCSTR lpbi = (LPCSTR)GlobalLock(hDib);
 	if (lpbi == NULL)
 		return FALSE;
 
-	DWORD dwOffBits = DibBitsOffset(lpbi);
-	DWORD dwBitsSize = DibImageSize(lpbi);
-	DWORD dwDibSize = dwOffBits + dwBitsSize;
+	DWORD dwHeaderSize = *(LPDWORD)lpbi;
+	DWORD dwMasksSize = ColorMasksSize(lpbi);
+	DWORD dwPaletteSize = PaletteSize(lpbi);
+	DWORD dwImageSize = DibImageSize(lpbi);
+	DWORD dwProfileSize = 0;
 
-	if (DibHasColorProfile(lpbi))
+	SIZE_T cbOffBits = (SIZE_T)dwHeaderSize + dwMasksSize + dwPaletteSize;
+
+	// Copy the header so that we can adjust biSizeImage and bV5ProfileData.
+	// For this purpose, we can use a v5 structure for all bitmap variants.
+	BITMAPV5HEADER bmhv5;
+	ZeroMemory(&bmhv5, sizeof(bmhv5));
+	CopyMemory(&bmhv5, lpbi, min(dwHeaderSize, sizeof(bmhv5)));
+
+	if (bmhv5.bV5SizeImage)
+		bmhv5.bV5SizeImage = dwImageSize;
+
+	BOOL bHasProfile = DibHasColorProfile(lpbi);
+	if (bHasProfile)
 	{
-		LPBITMAPV5HEADER lpbiv5 = (LPBITMAPV5HEADER)lpbi;
-		// Check for a gap between bitmap bits and profile data
-		if (lpbiv5->bV5ProfileData > dwDibSize)
-			dwDibSize += lpbiv5->bV5ProfileData - dwDibSize;
-		// Check whether the profile data follows the bitmap bits
-		if ((lpbiv5->bV5ProfileData + lpbiv5->bV5ProfileSize) != dwOffBits)
-			dwDibSize += lpbiv5->bV5ProfileSize;
+		bmhv5.bV5ProfileData = (DWORD)(cbOffBits + dwImageSize);
+		dwProfileSize = bmhv5.bV5ProfileSize;
 	}
 
-	BITMAPFILEHEADER bmfHdr = { 0 };
-	bmfHdr.bfType = BFT_BITMAP;
-	bmfHdr.bfSize = dwDibSize + sizeof(BITMAPFILEHEADER);
-	bmfHdr.bfOffBits = dwOffBits + sizeof(BITMAPFILEHEADER);
+	SIZE_T cbDibSize = cbOffBits + dwImageSize + dwProfileSize;
+	if (cbDibSize > cbLen)
+	{
+		GlobalUnlock(hDib);
+		return FALSE;
+	}
 
-	HANDLE hFile = CreateFile(lpszFileName, GENERIC_READ | GENERIC_WRITE, 0, NULL,
-		CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+	BITMAPFILEHEADER bfh = { 0 };
+	bfh.bfType = BFT_BITMAP;
+	bfh.bfSize = (DWORD)(cbDibSize + sizeof(BITMAPFILEHEADER));
+	bfh.bfOffBits = (DWORD)(cbOffBits + sizeof(BITMAPFILEHEADER));
+
+	HANDLE hFile = CreateFile(lpszFileName, GENERIC_READ | GENERIC_WRITE, 0, NULL, CREATE_ALWAYS,
+		FILE_ATTRIBUTE_NORMAL, NULL);
 	if (hFile == INVALID_HANDLE_VALUE)
 	{
 		GlobalUnlock(hDib);
 		return FALSE;
 	}
 
+	// Write file header
 	DWORD dwWrite = 0;
-	if (!WriteFile(hFile, &bmfHdr, sizeof(BITMAPFILEHEADER), &dwWrite, NULL) ||
-		dwWrite != sizeof(BITMAPFILEHEADER))
+	if (!WriteFile(hFile, &bfh, sizeof(BITMAPFILEHEADER), &dwWrite, NULL) || dwWrite != sizeof(BITMAPFILEHEADER))
 	{
 		GlobalUnlock(hDib);
 		CloseHandle(hFile);
@@ -75,12 +93,59 @@ BOOL SaveBitmap(LPCTSTR lpszFileName, HANDLE hDib)
 		return FALSE;
 	}
 
-	if (!WriteFile(hFile, (LPVOID)lpbi, dwDibSize, &dwWrite, NULL) || dwWrite != dwDibSize)
+	// Write bitmap header
+	if (!WriteFile(hFile, &bmhv5, dwHeaderSize, &dwWrite, NULL) || dwWrite != dwHeaderSize)
 	{
 		GlobalUnlock(hDib);
 		CloseHandle(hFile);
 		DeleteFile(lpszFileName);
 		return FALSE;
+	}
+
+	// Write color masks
+	if (dwMasksSize)
+	{
+		if (!WriteFile(hFile, lpbi + dwHeaderSize, dwMasksSize, &dwWrite, NULL) || dwWrite != dwMasksSize)
+		{
+			GlobalUnlock(hDib);
+			CloseHandle(hFile);
+			DeleteFile(lpszFileName);
+			return FALSE;
+		}
+	}
+
+	// Write color table
+	if (dwPaletteSize)
+	{
+		if (!WriteFile(hFile, FindDibPalette(lpbi), dwPaletteSize, &dwWrite, NULL) || dwWrite != dwPaletteSize)
+		{
+			GlobalUnlock(hDib);
+			CloseHandle(hFile);
+			DeleteFile(lpszFileName);
+			return FALSE;
+		}
+	}
+
+	// Write bitmap bits
+	if (!WriteFile(hFile, FindDibBits(lpbi), dwImageSize, &dwWrite, NULL) || dwWrite != dwImageSize)
+	{
+		GlobalUnlock(hDib);
+		CloseHandle(hFile);
+		DeleteFile(lpszFileName);
+		return FALSE;
+	}
+
+	// Write color profile
+	if (bHasProfile)
+	{
+		if (!WriteFile(hFile, lpbi + ((LPBITMAPV5HEADER)lpbi)->bV5ProfileData, dwProfileSize, &dwWrite, NULL) ||
+			dwWrite != dwProfileSize)
+		{
+			GlobalUnlock(hDib);
+			CloseHandle(hFile);
+			DeleteFile(lpszFileName);
+			return FALSE;
+		}
 	}
 
 	GlobalUnlock(hDib);
@@ -173,7 +238,7 @@ HBITMAP CreatePremultipliedBitmap(HANDLE hDib)
 	LPBYTE lpDIB = FindDibBits((LPCSTR)lpbi);
 
 	HBITMAP hbmpDib = CreateDIBSection(NULL, &bmi, DIB_RGB_COLORS, (PVOID*)&lpBGRA, NULL, 0);
-	if (hbmpDib == NULL)
+	if (hbmpDib == NULL || lpBGRA == NULL)
 	{
 		GlobalUnlock(hDib);
 		return NULL;
@@ -451,77 +516,6 @@ HANDLE ConvertBitmapToDib(HBITMAP hBitmap, HDC hdc, WORD wBitCount)
 	}
 
 	return hDib;
-}
-
-////////////////////////////////////////////////////////////////////////////////////////////////
-// CreateDibFromClipboardDib creates a DIB from a clipboard/memory DIB in which the
-// profile data follows the bitmap bits. It does not fix an incorrectly synthesized
-// DIBv5 (see comment on the CreateClipboardDib function). The application should
-// use EnumClipboardFormats to determine the most descriptive clipboard format.
-
-HANDLE CreateDibFromClipboardDib(HANDLE hDib)
-{
-	if (hDib == NULL)
-		return NULL;
-
-	SIZE_T cbLen = GlobalSize(hDib);
-	if (cbLen == 0)
-		return NULL;
-
-	LPBYTE lpSrc = (LPBYTE)GlobalLock(hDib);
-	if (lpSrc == NULL)
-		return NULL;
-
-	if (!DibHasColorProfile((LPCSTR)lpSrc))
-	{
-		GlobalUnlock(hDib);
-		// No profile needs to be moved. Just copy the DIB.
-		return CopyDib(hDib);
-	}
-
-	LPBITMAPV5HEADER lpbiv5 = (LPBITMAPV5HEADER)lpSrc;
-	DWORD dwInfoSize = lpbiv5->bV5Size + PaletteSize((LPCSTR)lpSrc);
-	DWORD dwProfileSize = lpbiv5->bV5ProfileSize;
-	SIZE_T cbImageSize = DibImageSize((LPCSTR)lpSrc);
-	SIZE_T cbDibSize = cbImageSize + dwInfoSize + dwProfileSize;
-
-	if (cbDibSize > cbLen)
-	{
-		GlobalUnlock(hDib);
-		return NULL;
-	}
-
-	HANDLE hNewDib = GlobalAlloc(GHND, cbDibSize);
-	if (hNewDib == NULL)
-	{
-		GlobalUnlock(hDib);
-		return NULL;
-	}
-
-	LPBYTE lpDest = (LPBYTE)GlobalLock(hNewDib);
-	if (lpDest == NULL)
-	{
-		GlobalFree(hNewDib);
-		GlobalUnlock(hDib);
-		return NULL;
-	}
-
-	__try
-	{
-		CopyMemory(lpDest, lpSrc, dwInfoSize);
-		// FindDibBits must support DIBs in which the profile data is located before the bitmap bits
-		CopyMemory(lpDest + dwInfoSize, FindDibBits((LPCSTR)lpSrc), cbImageSize);
-		CopyMemory(lpDest + dwInfoSize + cbImageSize, lpSrc + lpbiv5->bV5ProfileData, dwProfileSize);
-
-		// Update the header with the new position of the profile data
-		((LPBITMAPV5HEADER)lpDest)->bV5ProfileData = dwInfoSize + (DWORD)cbImageSize;
-	}
-	__except (EXCEPTION_EXECUTE_HANDLER) { ; }
-
-	GlobalUnlock(hNewDib);
-	GlobalUnlock(hDib);
-
-	return hNewDib;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////
