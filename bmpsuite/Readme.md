@@ -5,7 +5,7 @@ This folder contains various variants of images in Windows Bitmap format.
 ## BMP Suite
 
 The files are from the [BMP Suite](https://entropymine.com/jason/bmpsuite/) version 2.7.
-Here on GitHub you can also find the [source code](https://github.com/jsummers/bmpsuite) with which the files can be generated.
+The [source code](https://github.com/jsummers/bmpsuite) with which the files can be generated is available on GitHub.
 The author, Jason Summers, also provides a [description of each image](https://entropymine.com/jason/bmpsuite/bmpsuite/html/bmpsuite.html).
 
 ## Additional Images
@@ -28,7 +28,7 @@ This combination is not specified, but could be useful for testing.
 `b/pal8-zo.bmp`
 
 This is a bitmap with bfOffBits = 0 set in the file header.
-In early Software Development Kit (SDK) samples, packed bitmap files were marked this way.
+In early Software Development Kit samples, packed bitmap files were marked this way.
 
 `b/nopalette.bmp`
 
@@ -49,20 +49,23 @@ The bit depths are not specified for OS/2 1.1 bitmaps, but the 16-bit and 32-bit
 
 `g/rgb24calibr.bmp`
 
-A bitmap calibrated according to the ICM 1.0 standard using linear tone mapping and red/green swapped.
-An application that supports Image Color Management (ICM) displays this image like a standard sRGB bitmap.
+A calibrated v4 bitmap with linear tone mapping (gamma = 1.0) and with the chromaticity endpoints for red and green swapped.
+An application that supports Image Color Management (ICM) displays this image with the correct colors.
 
 `q/devicergb.bmp`
 
-This bitmap already contains colors that are adapted to the output device and has been marked accordingly.
-All primaries are set to the same endpoints (results in a greyscale image) to see if they are ignored by the CMM.
-After the introduction of ICM 2.0, the definition of this format was removed from later SDKs.
+This v4 bitmap already contains colors that are adapted to the output device and has been marked accordingly.
+All primaries are set to the same endpoints (results in a greyscale image) to see if they are ignored by the color manager.
+This format was dropped shortly after its introduction.
+Presumably because such device-dependent image data can also be saved with the old v3 structure.
 
 `q/cmyk.bmp`
 
-ICM 1.0 specifies bitmaps containing CMYK data. The RGB color values were simply inverted here.
-Again, the Color Management Module (CMM) must pass the data directly to the output device.
-After the introduction of ICM 2.0, the definition of this format was also removed from later SDKs.
+A v4 bitmap with device-dependent CMYK data (the RGB color values were simply inverted here).
+All primaries are set to the same endpoints (results in a greyscale image) to see if they are ignored by the color manager.
+This format was dropped shortly after its introduction.
+Presumably because this representation of the image data can also be saved with the old v3 structure.
+However, the BI_CMYK flag had to be introduced for this.
 
 `q/rgb64.bmp`
 `q/rgba64.bmp`
