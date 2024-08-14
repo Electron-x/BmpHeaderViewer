@@ -487,6 +487,19 @@ INT_PTR CALLBACK HeaderViewerDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPA
 			return FALSE;
 		}
 
+		case WM_EXITSIZEMOVE:
+		{
+			if (g_nIcmMode == ICM_ON)
+			{
+				// Redraw the thumbnail if the window is moved
+				// to a monitor with a different color profile
+				HWND hwndThumb = GetDlgItem(hDlg, IDC_THUMB);
+				if (hwndThumb != NULL)
+					InvalidateRect(hwndThumb, NULL, FALSE);
+			}
+			return FALSE;
+		}
+
 		case WM_CLIPBOARDUPDATE:
 		{
 			EnableButton(hDlg, IDC_PASTE, IDC_OPEN,
@@ -666,9 +679,7 @@ INT_PTR CALLBACK HeaderViewerDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPA
 							return FALSE;
 						}
 
-						// Create a DIB in which the profile data follows the bitmap bits. Actually,
-						// we should now simply copy the DIB and move the profile while saving.
-						HANDLE hNewDib = CreateDibFromClipboardDib(hDib);
+						HANDLE hNewDib = CopyDib(hDib);
 						if (hNewDib == NULL)
 						{
 							CloseClipboard();
@@ -1641,11 +1652,11 @@ BOOL DrawDib(HDC hdc, LPBITMAPINFOHEADER lpbi, int xDest, int yDest, int wDest, 
 		return FALSE;
 
 	// Turn on ICM inside DC. When activated, there seem to be problems
-	// when printing large images with an embedded input color profile.
+	// when printing large images with an embedded color profile.
 	if (SetICMMode(hdc, g_nIcmMode) && g_nIcmMode == ICM_ON)
 	{
-		// A DC contains the output profile of the primary display. Check whether the application
-		// window is placed on a secondary monitor and set the corresponding color profile.
+		// A DC contains the color profile of the primary display. Check whether the application
+		// window is placed on a secondary monitor and set the corresponding display profile.
 		if (GetDeviceCaps(hdc, TECHNOLOGY) & DT_RASDISPLAY)
 		{
 			// TODO: Use the profiles set by the user in the Color Management UI
@@ -2231,7 +2242,7 @@ HRESULT UseImmersiveDarkMode(HWND hwndMain, BOOL bUse)
 // "DarkMode_CFD": Edit, ComboBox
 // "DarkMode_Explorer": Button, Edit (multiline), ScrollBar, TreeView
 // "DarkMode_ItemsView": ListView, Header
-//
+
 BOOL AllowDarkModeForWindow(HWND hwndParent, BOOL bAllow)
 {
 	if (hwndParent == NULL)
