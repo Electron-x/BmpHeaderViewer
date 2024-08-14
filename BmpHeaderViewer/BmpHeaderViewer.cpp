@@ -71,8 +71,8 @@ LRESULT CALLBACK OutputWndProc(HWND, UINT, WPARAM, LPARAM);
 
 // Opens and parses the passed file and outputs the result
 BOOL ParseFile(HWND hDlg, LPCTSTR lpszFileName);
-// Decompresses a JPEG image and displays it as thumbnail
-BOOL ReadJpeg(HWND hDlg, HANDLE hFile, DWORD dwFileSize);
+// Decompresses a JPEG image and displays some of its metadata
+BOOL ParseJpeg(HWND hDlg, HANDLE hFile, DWORD dwFileSize);
 // Displays a hex dump of the first 1024 bytes of a file
 BOOL HexDump(HWND hwndEdit, HANDLE hFile, SIZE_T cbLen);
 
@@ -1307,7 +1307,14 @@ BOOL ParseFile(HWND hDlg, LPCTSTR lpszFileName)
 	}
 	else if (achMagic[0] == 0xFF && achMagic[1] == 0xD8)
 	{ // JPEG
-		bSuccess = ReadJpeg(hDlg, hFile, wfad.nFileSizeLow);
+		SetLastError(ERROR_SUCCESS);
+		bSuccess = ParseJpeg(hDlg, hFile, wfad.nFileSizeLow);
+		if (!bSuccess)
+		{
+			DWORD dwError = GetLastError();
+			if (dwError != ERROR_SUCCESS)
+				OutputErrorMessage(hwndEdit, dwError);
+		}
 		EnableButton(hDlg, IDC_THUMB_COPY, IDC_OPEN, bSuccess);
 	}
 	else
@@ -1325,10 +1332,13 @@ BOOL ParseFile(HWND hDlg, LPCTSTR lpszFileName)
 
 ////////////////////////////////////////////////////////////////////////////////////////////////
 
-BOOL ReadJpeg(HWND hDlg, HANDLE hFile, DWORD dwFileSize)
+BOOL ParseJpeg(HWND hDlg, HANDLE hFile, DWORD dwFileSize)
 {
 	if (hDlg == NULL || hFile == NULL || dwFileSize == 0)
+	{
+		SetLastError(ERROR_INVALID_PARAMETER);
 		return FALSE;
+	}
 
 	HWND hwndEdit = GetDlgItem(hDlg, IDC_OUTPUT);
 	if (hwndEdit == NULL)
@@ -1372,6 +1382,29 @@ BOOL ReadJpeg(HWND hDlg, HANDLE hFile, DWORD dwFileSize)
 	}
 
 	MyGlobalFreePtr(lpData);
+
+	// Parse the returned DIB
+	OutputText(hwndEdit, g_szSepThin);
+
+	TCHAR szOutput[OUTPUT_LEN];
+	SIZE_T cbSize = GlobalSize(hDib);
+
+	OutputText(hwndEdit, TEXT("DIB Size:\t"));
+	if (cbSize > 0xFFFFFFFF)
+		OutputText(hwndEdit, TEXT("> 4 GB"));
+	else if (FormatByteSize((DWORD)cbSize, szOutput, _countof(szOutput)))
+		OutputText(hwndEdit, szOutput);
+	OutputText(hwndEdit, TEXT("\r\n"));
+
+	if (!ParseDIBitmap(hDlg, hDib))
+	{
+		DWORD dwError = GetLastError();
+		GlobalFree(hDib);
+		if (dwError != ERROR_SUCCESS)
+			SetLastError(dwError);
+		return FALSE;
+	}
+
 	ReplaceThumbnail(hwndThumb, hDib);
 
 	return TRUE;
