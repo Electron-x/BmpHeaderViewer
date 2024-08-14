@@ -595,18 +595,24 @@ BOOL GetICMProfileFromDevice(LPCTSTR lpszDevice, LPTSTR lpszProfile, SIZE_T cchL
 	if (lpszDevice == NULL || lpszProfile == NULL || cchLenOutput == 0)
 		return FALSE;
 
-	HDC hdcMonitor = CreateDC(TEXT("DISPLAY"), lpszDevice, NULL, NULL);
-	if (hdcMonitor == NULL)
+	// If lpszDevice is in the form of \\.\DISPLAY1, we
+	// can use CreateIC(NULL, lpszDevice, NULL, NULL),
+	// or CreateIC(lpszDevice, NULL, NULL, NULL), or:
+	HDC hdc = CreateIC(lpszDevice, lpszDevice, NULL, NULL);
+	if (hdc == NULL)
 		return FALSE;
 
+	// In the original release 21H2 of Windows 11, GetICMProfile always
+	// returned the Windows default color profile (sRGB). As of Build
+	// 22000.469, however, it works as in Windows 10 and before.
 	DWORD dwBufSize = (DWORD)cchLenOutput;
-	if (!GetICMProfile(hdcMonitor, &dwBufSize, lpszProfile))
+	if (!GetICMProfile(hdc, &dwBufSize, lpszProfile))
 	{
-		DeleteDC(hdcMonitor);
+		DeleteDC(hdc);
 		return FALSE;
 	}
 
-	DeleteDC(hdcMonitor);
+	DeleteDC(hdc);
 	return TRUE;
 }
 
@@ -692,7 +698,7 @@ static BOOL WINAPI ColorSetupApply(PCOLORMATCHSETUP pcms, LPARAM lParam)
 
 BOOL ColorMatchUI(HWND hDlg)
 {
-	// TODO: Add support for the selection of output color profiles
+	// TODO: Add support for the selection of device profiles
 	TCHAR szMonitorProfile[MAX_PATH + 1] = { 0 };
 	TCHAR szPrinterProfile[MAX_PATH + 1] = { 0 };
 	TCHAR szTargetProfile[MAX_PATH + 1] = { 0 };
