@@ -1093,7 +1093,7 @@ INT_PTR CALLBACK HeaderViewerDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPA
 			{
 				// Check if the font size stored in the registry
 				// is too different from the default value
-				if (abs(lFontHeight - lf.lfHeight) > 6)
+				if (abs(lFontHeight - lf.lfHeight) > 15)
 					bShowFontScalingInfo = TRUE;
 				// Use the saved font height anyway
 				lf.lfHeight = lFontHeight;
@@ -1763,14 +1763,37 @@ BOOL AlphaBlendBitmap(HDC hdc, HBITMAP hbm, int xDest, int yDest, int wDest, int
 		return FALSE;
 	}
 
-	static WORD wCheckPat[8] =
-	{
-		0x000F, 0x000F, 0x000F, 0x000F,
-		0x00F0, 0x00F0, 0x00F0, 0x00F0
-	};
-
 	// Draw a checkerboard pattern as background
-	HBITMAP hbmpBrush = CreateBitmap(8, 8, 1, 1, wCheckPat);
+	HBITMAP hbmpBrush = NULL;
+
+	if ((GetDeviceCaps(hdc, TECHNOLOGY) & DT_RASPRINTER) &&
+		(GetDeviceCaps(hdc, LOGPIXELSY) >= 300))
+	{
+		DWORD dwCheckPat[32] =
+		{
+			0x0000FFFF, 0x0000FFFF, 0x0000FFFF, 0x0000FFFF,
+			0x0000FFFF, 0x0000FFFF, 0x0000FFFF, 0x0000FFFF,
+			0x0000FFFF, 0x0000FFFF, 0x0000FFFF, 0x0000FFFF,
+			0x0000FFFF, 0x0000FFFF, 0x0000FFFF, 0x0000FFFF,
+			0xFFFF0000, 0xFFFF0000, 0xFFFF0000, 0xFFFF0000,
+			0xFFFF0000, 0xFFFF0000, 0xFFFF0000, 0xFFFF0000,
+			0xFFFF0000, 0xFFFF0000, 0xFFFF0000, 0xFFFF0000,
+			0xFFFF0000, 0xFFFF0000, 0xFFFF0000, 0xFFFF0000
+		};
+
+		hbmpBrush = CreateBitmap(32, 32, 1, 1, dwCheckPat);
+	}
+	else
+	{
+		WORD wCheckPat[8] =
+		{
+			0x000F, 0x000F, 0x000F, 0x000F,
+			0x00F0, 0x00F0, 0x00F0, 0x00F0
+		};
+
+		hbmpBrush = CreateBitmap(8, 8, 1, 1, wCheckPat);
+	}
+
 	if (hbmpBrush != NULL)
 	{
 		HBRUSH hbr = CreatePatternBrush(hbmpBrush);
