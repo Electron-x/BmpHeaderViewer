@@ -3,7 +3,7 @@
 ## Windows Bitmap (header) viewer application
 
 BMP Header Viewer is a small Windows application that displays the headers and metadata of Windows Bitmap files of almost all formats.  
-The DIB contained in the BMP file is displayed using Windows GDI or Video for Windows. An alpha channel and limited color management are supported. The application supports the transfer of bitmaps via the clipboard. It is also possible to print a bitmap and export the ICC profile of a BMP file.
+The DIB image contained in the BMP file is displayed using Windows GDI or Video for Windows. An alpha channel and limited color management are supported. The application supports the transfer of bitmaps via the clipboard. It is also possible to print a bitmap and export the ICC profile of a BMP file.
 
 <p>
 <picture>
@@ -350,8 +350,8 @@ A BMP file can be opened in various ways:
 
 - As a command line argument
 - Via the Open File dialog box
-- Via drag-and-drop (multiple at once)
-- Via the clipboard (multiple at once)
+- Via drag-and-drop (multiple files at once)
+- Via the clipboard (multiple files at once)
 
 For performance reasons, color management is only activated if the bitmap contains color space data. Color management and transparency are mutually exclusive. You can use the context menu of the thumbnail to activate or deactivate color matching for this specific image.
 
