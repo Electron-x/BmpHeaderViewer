@@ -1509,13 +1509,10 @@ BOOL PrintThumbnail(HWND hDlg, LPCTSTR lpszDocName)
 	HANDLE hDib = g_hDibThumb ? g_hDibThumb : g_hDibDefault;
 	if (hDib != NULL)
 	{
-		LPBITMAPINFOHEADER lpbi = (LPBITMAPINFOHEADER)GlobalLock(hDib);
+		LPCSTR lpbi = (LPCSTR)GlobalLock(hDib);
 		if (lpbi != NULL)
 		{
-			BOOL bIsCore = IS_OS2PM_DIB(lpbi);
-			LPBITMAPCOREHEADER lpbc = (LPBITMAPCOREHEADER)lpbi;
-			lWidth = bIsCore ? lpbc->bcWidth : abs(lpbi->biWidth);
-			lHeight = bIsCore ? lpbc->bcHeight : abs(lpbi->biHeight);
+			GetDIBDimensions(lpbi, &lWidth, &lHeight, TRUE);
 			GlobalUnlock(hDib);
 		}
 	}
@@ -1623,31 +1620,27 @@ BOOL OnDrawItem(const LPDRAWITEMSTRUCT lpDrawItem)
 			bSuccess = FALSE;
 		else
 		{
-			int nSrcX = 0;
-			int nSrcY = 0;
-			int nSrcWidth  = abs(lpbi->biWidth);
-			int nSrcHeight = abs(lpbi->biHeight);
+			LONG lSrcX = 0;
+			LONG lSrcY = 0;
+			LONG lSrcWidth  = 0;
+			LONG lSrcHeight = 0;
 
-			if (IS_OS2PM_DIB(lpbi))
-			{
-				nSrcWidth  = ((LPBITMAPCOREHEADER)lpbi)->bcWidth;
-				nSrcHeight = ((LPBITMAPCOREHEADER)lpbi)->bcHeight;
-			}
+			GetDIBDimensions((LPCSTR)lpbi, &lSrcWidth, &lSrcHeight, TRUE);
 
 			if (lpDrawItem->itemState & ODS_SELECTED)
 			{
-				nSrcX = nSrcWidth  / 20;
-				nSrcY = nSrcHeight / 20;
-				nSrcWidth  -= 2 * nSrcX;
-				nSrcHeight -= 2 * nSrcY;
+				lSrcX = lSrcWidth  / 20;
+				lSrcY = lSrcHeight / 20;
+				lSrcWidth  -= 2 * lSrcX;
+				lSrcHeight -= 2 * lSrcY;
 			}
 
 			if (g_hBitmapThumb != NULL && g_nIcmMode != ICM_ON)
 				bSuccess = AlphaBlendBitmap(hdc, g_hBitmapThumb, rc.left, rc.top,
-					rc.right - rc.left, rc.bottom - rc.top, nSrcX, nSrcY, nSrcWidth, nSrcHeight);
+					rc.right - rc.left, rc.bottom - rc.top, lSrcX, lSrcY, lSrcWidth, lSrcHeight);
 			else
 				bSuccess = DrawDib(hdc, lpbi, rc.left, rc.top, rc.right - rc.left, rc.bottom - rc.top,
-					nSrcX, nSrcY, nSrcWidth, nSrcHeight);
+					lSrcX, lSrcY, lSrcWidth, lSrcHeight);
 
 			GlobalUnlock(hDib);
 		}

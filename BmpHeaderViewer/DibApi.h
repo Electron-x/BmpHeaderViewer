@@ -198,6 +198,9 @@ HANDLE CreateClipboardDib(HANDLE hDib, UINT* puFormat = NULL);
 // If an error occurs, a halftone palette is created.
 HPALETTE CreateDibPalette(HANDLE hDib);
 
+// Gets the width and height of a DIB
+BOOL GetDIBDimensions(LPCSTR lpbi, LPLONG lplWidth, LPLONG lplHeight, BOOL bAbsolute = FALSE);
+
 // Calculates the number of colors in the DIBs color table
 UINT DibNumColors(LPCSTR lpbi);
 

@@ -31,8 +31,8 @@ BOOL SaveBitmap(LPCTSTR lpszFileName, HANDLE hDib)
 	if (hDib == NULL || lpszFileName == NULL)
 		return FALSE;
 
-	SIZE_T cbLen = GlobalSize(hDib);
-	if (cbLen < sizeof(BITMAPCOREHEADER))
+	SIZE_T cbSize = GlobalSize(hDib);
+	if (cbSize < sizeof(BITMAPCOREHEADER))
 		return FALSE;
 
 	LPCSTR lpbi = (LPCSTR)GlobalLock(hDib);
@@ -59,12 +59,12 @@ BOOL SaveBitmap(LPCTSTR lpszFileName, HANDLE hDib)
 	BOOL bHasProfile = DibHasColorProfile(lpbi);
 	if (bHasProfile)
 	{
-		bmhv5.bV5ProfileData = (DWORD)(cbOffBits + dwImageSize);
 		dwProfileSize = bmhv5.bV5ProfileSize;
+		bmhv5.bV5ProfileData = (DWORD)(cbOffBits + dwImageSize);
 	}
 
 	SIZE_T cbDibSize = cbOffBits + dwImageSize + dwProfileSize;
-	if (cbDibSize > cbLen)
+	if (cbDibSize > cbSize)
 	{
 		GlobalUnlock(hDib);
 		return FALSE;
@@ -206,9 +206,8 @@ HBITMAP CreatePremultipliedBitmap(HANDLE hDib)
 	if (lpbi == NULL)
 		return NULL;
 
-	LPBITMAPCOREHEADER lpbc = (LPBITMAPCOREHEADER)lpbi;
 	BOOL bIsCore = IS_OS2PM_DIB(lpbi);
-	WORD wBitCount = bIsCore ? lpbc->bcBitCount : lpbi->biBitCount;
+	WORD wBitCount = bIsCore ? ((LPBITMAPCOREHEADER)lpbi)->bcBitCount : lpbi->biBitCount;
 	BOOL bIs16Bpp = (wBitCount == 16);
 
 	if ((wBitCount != 16 && wBitCount != 32) ||
@@ -220,8 +219,9 @@ HBITMAP CreatePremultipliedBitmap(HANDLE hDib)
 		return NULL;
 	}
 
-	LONG lWidth  = bIsCore ? lpbc->bcWidth : lpbi->biWidth;
-	LONG lHeight = bIsCore ? lpbc->bcHeight : lpbi->biHeight;
+	LONG lWidth  = 0;
+	LONG lHeight = 0;
+	GetDIBDimensions((LPCSTR)lpbi, &lWidth, &lHeight);
 
 	BITMAPINFO bmi = { {0} };
 	bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
@@ -347,15 +347,15 @@ HANDLE CopyDib(HANDLE hDib)
 	if (hDib == NULL)
 		return NULL;
 
-	SIZE_T cbLen = GlobalSize(hDib);
-	if (cbLen == 0)
+	SIZE_T cbSize = GlobalSize(hDib);
+	if (cbSize == 0)
 		return NULL;
 
 	LPBYTE lpSrc = (LPBYTE)GlobalLock(hDib);
 	if (lpSrc == NULL)
 		return NULL;
 
-	HANDLE hNewDib = GlobalAlloc(GHND, cbLen);
+	HANDLE hNewDib = GlobalAlloc(GHND, cbSize);
 	if (hNewDib == NULL)
 	{
 		GlobalUnlock(hDib);
@@ -370,7 +370,7 @@ HANDLE CopyDib(HANDLE hDib)
 		return NULL;
 	}
 
-	__try { CopyMemory(lpDest, lpSrc, cbLen); }
+	__try { CopyMemory(lpDest, lpSrc, cbSize); }
 	__except (EXCEPTION_EXECUTE_HANDLER) { ; }
 
 	GlobalUnlock(hNewDib);
@@ -534,8 +534,8 @@ HANDLE CreateClipboardDib(HANDLE hDib, UINT *puFormat)
 	if (puFormat != NULL)
 		bForceDibV5 = (*puFormat == CF_DIBV5);
 
-	SIZE_T cbLen = GlobalSize(hDib);
-	if (cbLen == 0)
+	SIZE_T cbSize = GlobalSize(hDib);
+	if (cbSize == 0)
 		return NULL;
 
 	LPBYTE lpSrc = (LPBYTE)GlobalLock(hDib);
@@ -606,7 +606,7 @@ HANDLE CreateClipboardDib(HANDLE hDib, UINT *puFormat)
 	else if (dwSrcHeaderSize == sizeof(BITMAPINFOHEADER2))
 	{
 		// Create a new DIBv3 (or DIBv5) from an OS/2 2.0 DIB
-		hNewDib = GlobalAlloc(GMEM_MOVEABLE | GMEM_DDESHARE, cbLen + dwDestHeaderSize - dwSrcHeaderSize);
+		hNewDib = GlobalAlloc(GMEM_MOVEABLE | GMEM_DDESHARE, cbSize + dwDestHeaderSize - dwSrcHeaderSize);
 		if (hNewDib == NULL)
 		{
 			GlobalUnlock(hDib);
@@ -625,7 +625,7 @@ HANDLE CreateClipboardDib(HANDLE hDib, UINT *puFormat)
 		{
 			CopyMemory(lpDest, lpSrc, sizeof(BITMAPINFOHEADER));
 			ZeroMemory(lpDest + sizeof(BITMAPINFOHEADER), dwDestHeaderSize - sizeof(BITMAPINFOHEADER));
-			CopyMemory(lpDest + dwDestHeaderSize, lpSrc + dwSrcHeaderSize, cbLen - dwSrcHeaderSize);
+			CopyMemory(lpDest + dwDestHeaderSize, lpSrc + dwSrcHeaderSize, cbSize - dwSrcHeaderSize);
 
 			// Update the v3 (or v5) header with the new header size
 			((LPBITMAPINFOHEADER)lpDest)->biSize = dwDestHeaderSize;
@@ -685,7 +685,7 @@ HANDLE CreateClipboardDib(HANDLE hDib, UINT *puFormat)
 		SIZE_T cbImageSize = DibImageSize((LPCSTR)lpSrc);
 		SIZE_T cbDibSize = cbImageSize + dwInfoSize + dwProfileSize;
 
-		if (cbDibSize > cbLen)
+		if (cbDibSize > cbSize)
 		{
 			GlobalUnlock(hDib);
 			return NULL;
@@ -722,7 +722,7 @@ HANDLE CreateClipboardDib(HANDLE hDib, UINT *puFormat)
 	else
 	{
 		// Copy the packed DIB
-		hNewDib = GlobalAlloc(GMEM_MOVEABLE | GMEM_DDESHARE, cbLen);
+		hNewDib = GlobalAlloc(GMEM_MOVEABLE | GMEM_DDESHARE, cbSize);
 		if (hNewDib == NULL)
 		{
 			GlobalUnlock(hDib);
@@ -737,7 +737,7 @@ HANDLE CreateClipboardDib(HANDLE hDib, UINT *puFormat)
 			return NULL;
 		}
 
-		__try { CopyMemory(lpDest, lpSrc, cbLen); }
+		__try { CopyMemory(lpDest, lpSrc, cbSize); }
 		__except (EXCEPTION_EXECUTE_HANDLER) { ; }
 
 		GlobalUnlock(hNewDib);
@@ -831,6 +831,28 @@ CreateHalftonePal:
 	}
 
 	return hpal;
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////
+
+BOOL GetDIBDimensions(LPCSTR lpbi, LPLONG lplWidth, LPLONG lplHeight, BOOL bAbsolute)
+{
+	if (lpbi == NULL || lplWidth == NULL || lplHeight == NULL)
+		return FALSE;
+
+	if (IS_OS2PM_DIB(lpbi))
+	{
+		*lplWidth = ((LPBITMAPCOREHEADER)lpbi)->bcWidth;
+		*lplHeight = ((LPBITMAPCOREHEADER)lpbi)->bcHeight;
+	}
+	else
+	{
+		LPBITMAPINFOHEADER lpbih = (LPBITMAPINFOHEADER)lpbi;
+		*lplWidth = bAbsolute ? abs(lpbih->biWidth) : lpbih->biWidth;
+		*lplHeight = bAbsolute ? abs(lpbih->biHeight) : lpbih->biHeight;
+	}
+
+	return TRUE;
 }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////
