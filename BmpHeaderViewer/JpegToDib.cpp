@@ -131,7 +131,7 @@ HANDLE JpegToDib(LPVOID lpJpegData, DWORD dwLenData, INT nTraceLevel)
 	DWORD dwHeaderSize = bHasProfile ? sizeof(BITMAPV5HEADER) : sizeof(BITMAPINFOHEADER);
 
 	// Allocate memory for the DIB
-	hDib = GlobalAlloc(GHND, dwHeaderSize + uNumColors * sizeof(RGBQUAD) + dwImageSize + uProfileLen);
+	hDib = GlobalAlloc(GHND, dwHeaderSize + uNumColors * sizeof(RGBQUAD) + uProfileLen + dwImageSize);
 	if (hDib == NULL)
 	{
 		cleanup_jpeg_to_dib(&JpegDecompress, hDib);
@@ -139,8 +139,7 @@ HANDLE JpegToDib(LPVOID lpJpegData, DWORD dwLenData, INT nTraceLevel)
 	}
 
 	// Fill bitmap information block
-	LPBITMAPINFO lpBMI = (LPBITMAPINFO)GlobalLock(hDib);
-	LPBITMAPV5HEADER lpBIV5 = (LPBITMAPV5HEADER)lpBMI;
+	LPBITMAPV5HEADER lpBIV5 = (LPBITMAPV5HEADER)GlobalLock(hDib);
 	if (lpBIV5 == NULL)
 	{
 		cleanup_jpeg_to_dib(&JpegDecompress, hDib);
@@ -183,6 +182,17 @@ HANDLE JpegToDib(LPVOID lpJpegData, DWORD dwLenData, INT nTraceLevel)
 		}
 	}
 
+	// Embed an existing ICC profile into the DIB
+	if (bHasProfile)
+	{
+		lpBIV5->bV5CSType = PROFILE_EMBEDDED;
+		lpBIV5->bV5Intent = LCS_GM_IMAGES;
+		lpBIV5->bV5ProfileSize = uProfileLen;
+		lpBIV5->bV5ProfileData = dwHeaderSize + uNumColors * sizeof(RGBQUAD);
+
+		CopyMemory((LPBYTE)lpBIV5 + lpBIV5->bV5ProfileData, JpegDecompress.lpProfileData, uProfileLen);
+	}
+
 	// Determine pointer to start of image data
 	LPBYTE lpDIB = FindDibBits((LPCSTR)lpBIV5);
 	LPBYTE lpBits = NULL;            // Pointer to a DIB image row
@@ -190,7 +200,7 @@ HANDLE JpegToDib(LPVOID lpJpegData, DWORD dwLenData, INT nTraceLevel)
 	JDIMENSION uScanline = 0;        // Row index
 	BYTE cKey, cRed, cGreen, cBlue;  // Color components
 	// Consider that Adobe Photoshop writes inverted CMYK data
-	BYTE cInv = pjInfo->saw_Adobe_marker ? 0 : 255;
+	BYTE cInv = pjInfo->saw_Adobe_marker ? 0x00 : 0xFF;
 
 	// Copy image rows (scanlines). The arrangement of the color
 	// components must be changed in jmorecfg.h from RGB to BGR.
@@ -217,17 +227,6 @@ HANDLE JpegToDib(LPVOID lpJpegData, DWORD dwLenData, INT nTraceLevel)
 				lpBits[u + 3] = 0xFF;
 			}
 		}
-	}
-
-	// Embed an existing ICC profile into the DIB
-	if (bHasProfile)
-	{
-		lpBIV5->bV5CSType = PROFILE_EMBEDDED;
-		lpBIV5->bV5Intent = LCS_GM_IMAGES;
-		lpBIV5->bV5ProfileSize = uProfileLen;
-		lpBIV5->bV5ProfileData = (DWORD)(lpDIB - (LPBYTE)lpBIV5) + dwImageSize;
-
-		CopyMemory(lpDIB + dwImageSize, JpegDecompress.lpProfileData, uProfileLen);
 	}
 
 	// Finish decompression
@@ -338,29 +337,21 @@ void my_output_message(j_common_ptr pjInfo)
 
 void my_emit_message(j_common_ptr pjInfo, int nMessageLevel)
 {
-	char szBuffer[JMSG_LENGTH_MAX];
-
-	// Process message level
 	if (nMessageLevel < 0)
-	{ // Warning
+	{ // Warning -> Display only if trace_level >= 1
 		if ((pjInfo->err->num_warnings == 0 && pjInfo->err->trace_level >= 1) ||
 			pjInfo->err->trace_level >= 3)
 			(*pjInfo->err->output_message)(pjInfo);
 		// Increase warning counter
 		pjInfo->err->num_warnings++;
 	}
-	else
-	{
-		if (nMessageLevel == 0)
-			// Important message -> display on screen
-			(*pjInfo->err->output_message)(pjInfo);
-		else
-		{ // Trace information -> Display if trace_level >= msg_level
-			if (pjInfo->err->trace_level >= nMessageLevel)
-				(*pjInfo->err->output_message)(pjInfo);
-			else
-				(*pjInfo->err->format_message)(pjInfo, szBuffer);
-		}
+	else if (nMessageLevel == 0)
+	{ // Important message -> Display on screen
+		(*pjInfo->err->output_message)(pjInfo);
+	}
+	else if (pjInfo->err->trace_level >= nMessageLevel)
+	{ // Trace information -> Display if trace_level >= msg_level
+		(*pjInfo->err->output_message)(pjInfo);
 	}
 }
 
