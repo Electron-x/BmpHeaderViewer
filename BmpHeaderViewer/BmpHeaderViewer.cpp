@@ -706,6 +706,16 @@ INT_PTR CALLBACK HeaderViewerDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPA
 							OutputTextFmt(hwndEdit, TEXT("%u"), uFormat);
 						OutputText(hwndEdit, TEXT("\r\n"));
 
+						TCHAR szOutput[OUTPUT_LEN];
+						SIZE_T cbSize = GlobalSize(hNewDib);
+
+						OutputText(hwndEdit, TEXT("Object Size:\t"));
+						if (cbSize > 0xFFFFFFFF)
+							OutputText(hwndEdit, TEXT("> 4 GB"));
+						else if (FormatByteSize((DWORD)cbSize, szOutput, _countof(szOutput)))
+							OutputText(hwndEdit, szOutput);
+						OutputText(hwndEdit, TEXT("\r\n"));
+
 						SetLastError(ERROR_SUCCESS);
 						BOOL bSuccess = ParseDIBitmap(hDlg, hNewDib);
 						if (bSuccess)
@@ -1525,11 +1535,11 @@ BOOL PrintThumbnail(HWND hDlg, LPCTSTR lpszDocName)
 		lHorzPrintArea = MulDiv(lVertPrintArea, lWidth, lHeight);
 	}
 
-	RECT rcPaint = { 0 };
-	rcPaint.left = bCenterHorizontally ? (lHorzRes - lHorzPrintArea) / 2 : 0;
-	rcPaint.top = bCenterVertically ? (lVertRes - lVertPrintArea) / 2 : 0;
-	rcPaint.right = rcPaint.left + lHorzPrintArea;
-	rcPaint.bottom = rcPaint.top + lVertPrintArea;
+	RECT rcPrint = { 0 };
+	rcPrint.left = bCenterHorizontally ? (lHorzRes - lHorzPrintArea) / 2 : 0;
+	rcPrint.top = bCenterVertically ? (lVertRes - lVertPrintArea) / 2 : 0;
+	rcPrint.right = rcPrint.left + lHorzPrintArea;
+	rcPrint.bottom = rcPrint.top + lVertPrintArea;
 
 	DOCINFO di = { 0 };
 	di.cbSize = sizeof(di);
@@ -1538,7 +1548,7 @@ BOOL PrintThumbnail(HWND hDlg, LPCTSTR lpszDocName)
 	// To print, use the same function that draws the thumbnail
 	DRAWITEMSTRUCT dis = { 0 };
 	dis.hDC = pd.hDC;
-	dis.rcItem = rcPaint;
+	dis.rcItem = rcPrint;
 	dis.CtlID = IDC_THUMB;
 	dis.CtlType = ODT_BUTTON;
 	dis.itemState = ODS_DEFAULT;
@@ -1769,19 +1779,11 @@ BOOL AlphaBlendBitmap(HDC hdc, HBITMAP hbm, int xDest, int yDest, int wDest, int
 	if ((GetDeviceCaps(hdc, TECHNOLOGY) & DT_RASPRINTER) &&
 		(GetDeviceCaps(hdc, LOGPIXELSY) >= 300))
 	{
-		DWORD dwCheckPat[32] =
-		{
-			0x0000FFFF, 0x0000FFFF, 0x0000FFFF, 0x0000FFFF,
-			0x0000FFFF, 0x0000FFFF, 0x0000FFFF, 0x0000FFFF,
-			0x0000FFFF, 0x0000FFFF, 0x0000FFFF, 0x0000FFFF,
-			0x0000FFFF, 0x0000FFFF, 0x0000FFFF, 0x0000FFFF,
-			0xFFFF0000, 0xFFFF0000, 0xFFFF0000, 0xFFFF0000,
-			0xFFFF0000, 0xFFFF0000, 0xFFFF0000, 0xFFFF0000,
-			0xFFFF0000, 0xFFFF0000, 0xFFFF0000, 0xFFFF0000,
-			0xFFFF0000, 0xFFFF0000, 0xFFFF0000, 0xFFFF0000
-		};
+		DWORD dwCheckPat[32] = { 0 };
+		for (int i = 0; i < 32; i++)
+			dwCheckPat[i] = (i & 16) ? 0x0000FFFF : 0xFFFF0000;
 
-		hbmpBrush = CreateBitmap(32, 32, 1, 1, dwCheckPat);
+		hbmpBrush = CreateBitmap(32, 32, 1, 1, &dwCheckPat);
 	}
 	else
 	{
@@ -1791,7 +1793,7 @@ BOOL AlphaBlendBitmap(HDC hdc, HBITMAP hbm, int xDest, int yDest, int wDest, int
 			0x00F0, 0x00F0, 0x00F0, 0x00F0
 		};
 
-		hbmpBrush = CreateBitmap(8, 8, 1, 1, wCheckPat);
+		hbmpBrush = CreateBitmap(8, 8, 1, 1, &wCheckPat);
 	}
 
 	if (hbmpBrush != NULL)
