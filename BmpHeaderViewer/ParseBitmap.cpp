@@ -650,7 +650,12 @@ BOOL ParseDIBitmap(HWND hDlg, HANDLE hDib, DWORD dwOffBits)
 	}
 
 	// Check for a gap between color table and bitmap bits
+	DWORD dwImageSize = DibImageSize(lpbi);
 	DWORD dwOffBitsPacked = DibBitsOffset(lpbi);
+
+	// Check for additional color masks of an incorrectly synthesized CF_DIBV5 that uses BI_BITFIELDS
+	if (dwOffBits == 0 && (dwDibSize - dwImageSize - dwOffBitsPacked) == (3 * (UINT)sizeof(DWORD)))
+		dwOffBits = dwDibSize - dwImageSize;
 
 	if ((dwOffBits != 0 ? dwOffBits : dwOffBitsPacked) > dwDibSize)
 	{
@@ -742,7 +747,7 @@ BOOL ParseDIBitmap(HWND hDlg, HANDLE hDib, DWORD dwOffBits)
 	}
 
 	// Check whether the bitmap bits are cropped
-	if (((dwOffBits != 0 ? dwOffBits : dwOffBitsPacked) + DibImageSize(lpbi)) > dwDibSize)
+	if (((dwOffBits != 0 ? dwOffBits : dwOffBitsPacked) + dwImageSize) > dwDibSize)
 	{
 		GlobalUnlock(hDib);
 		OutputTextFromID(hwndEdit, IDS_CORRUPTED);
@@ -762,7 +767,7 @@ BOOL ParseDIBitmap(HWND hDlg, HANDLE hDib, DWORD dwOffBits)
 		}
 
 		// Check for a gap between bitmap bits and profile data
-		DWORD dwProfileData = DibBitsOffset(lpbi) + DibImageSize(lpbi);
+		DWORD dwProfileData = dwOffBitsPacked + dwImageSize;
 		if (lpbih->bV5ProfileData > dwProfileData)
 		{
 			OutputText(hwndEdit, g_szSepThin);
