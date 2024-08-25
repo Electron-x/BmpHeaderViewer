@@ -772,6 +772,16 @@ INT_PTR CALLBACK HeaderViewerDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPA
 				}
 				return FALSE;
 
+				case IDC_THUMB_OPENWITH:
+				{
+					OPENASINFO oi = { 0 };
+					oi.pcszFile = s_szFileName;
+					oi.oaifInFlags = OAIF_EXEC | OAIF_HIDE_REGISTRATION;
+
+					SHOpenWithDialog(hDlg, &oi);
+				}
+				return FALSE;
+
 				case IDC_THUMB_COPY:
 				{ // Copy the current thumbnail to the clipboard
 					HANDLE hDib = g_hDibThumb ? g_hDibThumb : g_hDibDefault;
@@ -826,7 +836,9 @@ INT_PTR CALLBACK HeaderViewerDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPA
 
 					if (GetFileName(hDlg, szFileName, _countof(szFileName), &dwFilterIndex, TRUE))
 					{
+						TCHAR szText[512];
 						BOOL bSuccess = FALSE;
+
 						HCURSOR hOldCursor = SetCursor(LoadCursor(NULL, IDC_WAIT));
 						if (dwFilterIndex == 2)
 							bSuccess = SaveProfile(szFileName, g_hDibThumb);
@@ -836,9 +848,14 @@ INT_PTR CALLBACK HeaderViewerDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPA
 
 						if (!bSuccess)
 						{
-							TCHAR szText[512];
 							if (LoadString(g_hInstance, IDP_WRITEFILE, szText, _countof(szText)) > 0)
 								MessageBox(hDlg, szText, g_szTitle, MB_OK | MB_ICONEXCLAMATION);
+						}
+						else if (dwFilterIndex != 2)
+						{
+							int nLen = LoadString(g_hInstance, IDS_UNNAMED, szText, _countof(szText));
+							if (nLen > 0 && _tcsncmp(s_szFileName, szText, nLen) == 0)
+								MyStrNCpy(s_szFileName, szFileName, _countof(s_szFileName));
 						}
 					}
 				}
@@ -962,6 +979,11 @@ INT_PTR CALLBACK HeaderViewerDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPA
 						EnableMenuItem(hmenuTrackPopup, IDC_THUMB_PRINT, MF_BYCOMMAND | MF_GRAYED);
 						EnableMenuItem(hmenuTrackPopup, IDC_THUMB_SAVE, MF_BYCOMMAND | MF_GRAYED);
 					}
+
+					TCHAR szUnnamed[MAX_PATH];
+					int nLen = LoadString(g_hInstance, IDS_UNNAMED, szUnnamed, _countof(szUnnamed));
+					if (nLen > 0 && _tcsncmp(s_szFileName, szUnnamed, nLen) == 0)
+						EnableMenuItem(hmenuTrackPopup, IDC_THUMB_OPENWITH, MF_BYCOMMAND | MF_GRAYED);
 				}
 
 				MENUINFO mi = { 0 };
