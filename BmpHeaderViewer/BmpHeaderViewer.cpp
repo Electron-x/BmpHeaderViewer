@@ -31,6 +31,8 @@
 const TCHAR g_szTitle[]     = TEXT("BMP Header Viewer");
 const TCHAR g_szAbout[]     = TEXT("BMP Header Viewer ") VERSION TEXT(" (") PLATFORM TEXT(")\r\n")
                               TEXT("Copyright (c) 2024 by W. Rolke\r\n");
+const TCHAR g_szLicense[]   = TEXT("Licensed under the European Union Public Licence (EUPL), Version 1.2.\r\n")
+                              TEXT("This software is based in part on the work of the Independent JPEG Group.");
 const TCHAR g_szDlgClass[]  = TEXT("HeaderViewerDlgClass");
 const TCHAR g_szRegPath[]   = TEXT("Software\\Electron\\BmpHeaderViewer");
 const TCHAR g_szPlacement[] = TEXT("WindowPlacement");
@@ -657,6 +659,8 @@ INT_PTR CALLBACK HeaderViewerDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPA
 					}
 					else if (IsClipboardFormatAvailable(CF_DIB) || IsClipboardFormatAvailable(CF_DIBV5))
 					{ // Paste a DIBv3 or a DIBv5 from the clipboard
+						TCHAR szOutput[OUTPUT_LEN];
+
 						if (!OpenClipboard(hDlg))
 							return FALSE;
 
@@ -673,9 +677,13 @@ INT_PTR CALLBACK HeaderViewerDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPA
 						if (hDib == NULL)
 						{
 							CloseClipboard();
-							TCHAR szText[512];
-							if (LoadString(g_hInstance, IDP_CLIPBOARD, szText, _countof(szText)) > 0)
-								MessageBox(hDlg, szText, g_szTitle, MB_OK | MB_ICONEXCLAMATION);
+
+							_sntprintf(szOutput, _countof(szOutput), TEXT("Requested clipboard format: %s"),
+								uFormat == CF_DIB ? TEXT("CF_DIB") : (uFormat == CF_DIBV5 ? TEXT("CF_DIBV5") : TEXT("?")));
+							szOutput[OUTPUT_LEN - 1] = TEXT('\0');
+							TaskDialog(hDlg, g_hInstance, g_szTitle, MAKEINTRESOURCE(IDP_CLIPBOARD), szOutput,
+								TDCBF_OK_BUTTON, TD_WARNING_ICON, NULL);
+
 							return FALSE;
 						}
 
@@ -706,9 +714,7 @@ INT_PTR CALLBACK HeaderViewerDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPA
 							OutputTextFmt(hwndEdit, TEXT("%u"), uFormat);
 						OutputText(hwndEdit, TEXT("\r\n"));
 
-						TCHAR szOutput[OUTPUT_LEN];
 						SIZE_T cbSize = GlobalSize(hNewDib);
-
 						OutputText(hwndEdit, TEXT("Object Size:\t"));
 						if (cbSize > 0xFFFFFFFF)
 							OutputText(hwndEdit, TEXT("> 4 GB"));
@@ -836,7 +842,6 @@ INT_PTR CALLBACK HeaderViewerDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPA
 
 					if (GetFileName(hDlg, szFileName, _countof(szFileName), &dwFilterIndex, TRUE))
 					{
-						TCHAR szText[512];
 						BOOL bSuccess = FALSE;
 
 						HCURSOR hOldCursor = SetCursor(LoadCursor(NULL, IDC_WAIT));
@@ -848,11 +853,12 @@ INT_PTR CALLBACK HeaderViewerDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPA
 
 						if (!bSuccess)
 						{
-							if (LoadString(g_hInstance, IDP_WRITEFILE, szText, _countof(szText)) > 0)
-								MessageBox(hDlg, szText, g_szTitle, MB_OK | MB_ICONEXCLAMATION);
+							TaskDialog(hDlg, g_hInstance, g_szTitle, MAKEINTRESOURCE(IDP_WRITEFILE),
+								szFileName, TDCBF_OK_BUTTON, TD_WARNING_ICON, NULL);
 						}
 						else if (dwFilterIndex != 2)
 						{
+							TCHAR szText[512];
 							int nLen = LoadString(g_hInstance, IDS_UNNAMED, szText, _countof(szText));
 							if (nLen > 0 && _tcsncmp(s_szFileName, szText, nLen) == 0)
 								MyStrNCpy(s_szFileName, szFileName, _countof(s_szFileName));
@@ -1007,18 +1013,9 @@ INT_PTR CALLBACK HeaderViewerDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPA
 			static BOOL bAboutBox = FALSE;
 			if (!bAboutBox)
 			{
-				MSGBOXPARAMS mbp = { 0 };
-				mbp.cbSize       = sizeof(MSGBOXPARAMS);
-				mbp.hwndOwner    = hDlg;
-				mbp.hInstance    = g_hInstance;
-				mbp.lpszText     = g_szAbout;
-				mbp.lpszCaption  = g_szTitle;
-				mbp.dwStyle      = MB_OK | MB_USERICON;
-				mbp.lpszIcon     = MAKEINTRESOURCE(IDI_HEADERVIEWER);
-				mbp.dwLanguageId = MAKELANGID(LANG_NEUTRAL, SUBLANG_NEUTRAL);
-
 				bAboutBox = TRUE;
-				MessageBoxIndirect(&mbp);
+				TaskDialog(hDlg, g_hInstance, g_szTitle, g_szAbout, g_szLicense,
+					TDCBF_OK_BUTTON, MAKEINTRESOURCE(IDI_HEADERVIEWER), NULL);
 				bAboutBox = FALSE;
 			}
 		}
