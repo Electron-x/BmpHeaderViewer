@@ -42,6 +42,7 @@
 #include <cderr.h>
 #include <commdlg.h>
 #include <shellapi.h>
+#include <ShlObj.h>
 #include <vfw.h>
 #include <Uxtheme.h>
 #include <dwmapi.h>
