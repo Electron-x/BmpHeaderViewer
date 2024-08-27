@@ -659,8 +659,6 @@ INT_PTR CALLBACK HeaderViewerDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPA
 					}
 					else if (IsClipboardFormatAvailable(CF_DIB) || IsClipboardFormatAvailable(CF_DIBV5))
 					{ // Paste a DIBv3 or a DIBv5 from the clipboard
-						TCHAR szOutput[OUTPUT_LEN];
-
 						if (!OpenClipboard(hDlg))
 							return FALSE;
 
@@ -677,13 +675,8 @@ INT_PTR CALLBACK HeaderViewerDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPA
 						if (hDib == NULL)
 						{
 							CloseClipboard();
-
-							_sntprintf(szOutput, _countof(szOutput), TEXT("Requested clipboard format: %s"),
-								uFormat == CF_DIB ? TEXT("CF_DIB") : (uFormat == CF_DIBV5 ? TEXT("CF_DIBV5") : TEXT("?")));
-							szOutput[OUTPUT_LEN - 1] = TEXT('\0');
-							TaskDialog(hDlg, g_hInstance, g_szTitle, MAKEINTRESOURCE(IDP_CLIPBOARD), szOutput,
-								TDCBF_OK_BUTTON, TD_WARNING_ICON, NULL);
-
+							TaskDialog(hDlg, g_hInstance, g_szTitle, MAKEINTRESOURCE(IDP_CLIPBOARD),
+								NULL, TDCBF_OK_BUTTON, TD_WARNING_ICON, NULL);
 							return FALSE;
 						}
 
@@ -714,7 +707,9 @@ INT_PTR CALLBACK HeaderViewerDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPA
 							OutputTextFmt(hwndEdit, TEXT("%u"), uFormat);
 						OutputText(hwndEdit, TEXT("\r\n"));
 
+						TCHAR szOutput[OUTPUT_LEN] = { 0 };
 						SIZE_T cbSize = GlobalSize(hNewDib);
+
 						OutputText(hwndEdit, TEXT("Object Size:\t"));
 						if (cbSize > 0xFFFFFFFF)
 							OutputText(hwndEdit, TEXT("> 4 GB"));
@@ -1682,9 +1677,19 @@ BOOL OnDrawItem(const LPDRAWITEMSTRUCT lpDrawItem)
 
 	if (!bSuccess)
 	{ // Draw a 45-degree crosshatch
-		HBRUSH hbr = CreateHatchBrush(HS_DIAGCROSS, RGB(0, 0, 0));
-		FillRect(hdc, &rc, hbr);
-		DeleteBrush(hbr);
+		BOOL bDarkMode = g_bUseDarkMode && (GetDeviceCaps(hdc, TECHNOLOGY) & DT_RASPRINTER) == 0;
+
+		HBRUSH hbr = CreateHatchBrush(HS_DIAGCROSS,
+			bDarkMode ? RGB_DARKMODE_TEXTCOLOR : GetSysColor(COLOR_WINDOWTEXT));
+		COLORREF rgbBkOld = SetBkColor(hdc,
+			bDarkMode ? RGB_DARKMODE_BKCOLOR : GetSysColor(COLOR_WINDOW));
+
+		FillRect(hdc, &rc, hbr != NULL ? hbr : (HBRUSH)(COLOR_3DFACE + 1));
+
+		if (rgbBkOld != CLR_INVALID)
+			SetBkColor(hdc, rgbBkOld);
+		if (hbr != NULL)
+			DeleteBrush(hbr);
 	}
 
 	if (bDrawText)
