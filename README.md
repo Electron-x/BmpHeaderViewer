@@ -3,7 +3,7 @@
 ## Windows Bitmap (header) viewer application
 
 BMP Header Viewer is a small Windows application that displays the headers and metadata of Windows Bitmap files of almost all formats.  
-The DIB image contained in the BMP file is displayed using Windows GDI or Video for Windows. An alpha channel and limited color management are supported. The application supports the transfer of bitmaps via the clipboard. It is also possible to print a bitmap and export the ICC profile of a BMP file.
+The DIB image contained in the BMP file is rendered using Windows GDI or Video for Windows. An alpha channel and limited color management are supported. The application supports the transfer of bitmaps via the clipboard. It is also possible to print a bitmap and export the ICC profile of a BMP file.
 
 <p>
 <picture>
@@ -369,9 +369,9 @@ DIBs with extended BITMAPINFOHEADER fields, as described in the JPEG DIB Format 
 
 Multiple-version format bitmaps and OS/2 2.0-style DIBs with a truncated header, as described in the Presentation Manager Programming Reference, are not supported.
 
-The tool displays the header and tag table of an embedded color profile. Tag data is only displayed if it can be displayed in a single line. However, the profile can be exported for further examination, e.g. with the [ICC Profile Inspector](https://www.color.org/profileinspector.xalter) or using [wxProfileDump](https://www.color.org/profdump.xalter).
+The tool displays the header and tag table of an embedded color profile. Simple tag data is shown if it can be displayed in a single line. However, the profile can be exported for further examination, e.g. with the [ICC Profile Inspector](https://www.color.org/profileinspector.xalter) or using [wxProfileDump](https://www.color.org/profdump.xalter).
 
-Standard DIBs and DIBs with DIB format extensions are displayed directly using Windows GDI. No format conversion takes place. For custom formats, the DrawDib API from Video for Windows is used. No other codec-based frameworks such as Windows Imaging Component are used.
+Standard DIBs and DIBs with DIB format extensions are rendered directly using Windows GDI. No format conversion takes place. For custom formats, the DrawDib API from Video for Windows is used. No other codec-based frameworks such as Windows Imaging Component are used.
 
 Image color management is performed on-the-fly using [Device Context-based ICM](https://learn.microsoft.com/en-us/windows/win32/api/wingdi/nf-wingdi-seticmmode) (ICM 1.0). As ICM outside DC (ICM 2.0) is not supported, DIBs with transparent pixels are displayed without color matching. For the same reason, DIBs with linked ICC profiles are not supported. In the Color Management dialog box, profile selection, intent selection and proofing are not supported.
 
@@ -394,7 +394,7 @@ Licensed under the [European Union Public Licence (EUPL)](https://joinup.ec.euro
 
 This software is based in part on the work of the Independent JPEG Group.
 
-The image files in the bmpsuite folder are in the public domain.
+The image files in the [bmpsuite folder](/bmpsuite/) are in the public domain.
 
 ## Links
 
