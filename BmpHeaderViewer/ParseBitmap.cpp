@@ -1041,6 +1041,13 @@ BOOL ParseDIBitmap(HWND hDlg, HANDLE hDib, DWORD dwOffBits)
 			if (dwTagCount == 0)
 				goto Exit;
 
+			if ((sizeof(PROFILEV5HEADER) + sizeof(DWORD) + 3 * sizeof(DWORD) * dwTagCount) > dwProfileSize)
+			{
+				GlobalUnlock(hDib);
+				OutputTextFromID(hwndEdit, IDS_CORRUPTED);
+				return FALSE;
+			}
+
 			DWORD dwSignature = 0;
 			DWORD dwElementSize = 0;
 			DWORD dwElementOffset = 0;
