@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
-<assemblyIdentity type="win32" name="Electron.ImgTools.BmpHeaderViewer" version="1.4.0.5" processorArchitecture="amd64"></assemblyIdentity>
+<assemblyIdentity type="win32" name="Electron.ImgTools.BmpHeaderViewer" version="1.5.0.6" processorArchitecture="amd64"></assemblyIdentity>
 <description>BMP Header Viewer</description>
 <dependency>
 <dependentAssembly>
