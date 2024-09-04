@@ -26,6 +26,31 @@
 #include "..\libjpeg\iccprofile.h"
 
 ////////////////////////////////////////////////////////////////////////////////////////////////
+// Message Codes
+
+typedef enum _ADDON_MESSAGE_CODE
+{
+	JMSG_FIRSTADDONCODE = 1000,
+	JWRN_GLOBAL_ALLOC,
+	JWRN_GLOBAL_LOCK,
+	JTRC_PROFILE_DISCARDED,
+	JMSG_LASTADDONCODE
+} ADDON_MESSAGE_CODE;
+
+#define JMESSAGE(code,string)	string,
+
+static const char* const my_message_table[] =
+{
+	JMESSAGE(JMSG_FIRSTADDONCODE, NULL)
+	JMESSAGE(JWRN_GLOBAL_ALLOC, "Insufficient memory")
+	JMESSAGE(JWRN_GLOBAL_LOCK, "Locking a global memory object failed")
+	JMESSAGE(JTRC_PROFILE_DISCARDED, "Embedded color profile discarded")
+	JMESSAGE(JMSG_LASTADDONCODE, NULL)
+};
+
+#undef JMESSAGE
+
+////////////////////////////////////////////////////////////////////////////////////////////////
 // Data Types
 
 typedef struct jpeg_decompress_struct j_decompress;
@@ -94,12 +119,28 @@ HANDLE JpegToDib(LPVOID lpJpegData, DWORD dwLenData, INT nTraceLevel)
 	// Determine image information
 	jpeg_read_header(pjInfo, TRUE);
 
-	// Read an existing ICC profile. In the case of a CMYK output, however,
-	// we rudimentarily convert CMYK to RGB and discard the color profile.
+	// Read an existing ICC profile
 	UINT uProfileLen = 0;
-	BOOL bHasProfile = FALSE;
-	if (pjInfo->out_color_space != JCS_CMYK)
-		bHasProfile = read_icc_profile(pjInfo, &JpegDecompress.lpProfileData, &uProfileLen);
+	BOOL bHasProfile = read_icc_profile(pjInfo, &JpegDecompress.lpProfileData, &uProfileLen);
+
+	// In the case of CMYK output, we convert CMYK rudimentarily to RGB and
+	// discard the color profile. In other words: No support for CMYK and YCCK
+	if (bHasProfile && pjInfo->out_color_space == JCS_CMYK)
+	{
+		uProfileLen = 0;
+		bHasProfile = FALSE;
+
+		if (JpegDecompress.lpProfileData != NULL)
+		{
+			free(JpegDecompress.lpProfileData);
+			JpegDecompress.lpProfileData = NULL;
+		}
+
+		// Emit a trace message. The jerror.h file
+		// contains several macros for this purpose.
+		pjInfo->err->msg_code = JTRC_PROFILE_DISCARDED;
+		my_emit_message((j_common_ptr)pjInfo, 1);
+	}
 
 	// Image resolution
 	LONG lXPelsPerMeter = 0;
@@ -134,6 +175,8 @@ HANDLE JpegToDib(LPVOID lpJpegData, DWORD dwLenData, INT nTraceLevel)
 	hDib = GlobalAlloc(GHND, dwHeaderSize + uNumColors * sizeof(RGBQUAD) + uProfileLen + dwImageSize);
 	if (hDib == NULL)
 	{
+		pjInfo->err->msg_code = JWRN_GLOBAL_ALLOC;
+		my_emit_message((j_common_ptr)pjInfo, -1);
 		cleanup_jpeg_to_dib(&JpegDecompress, hDib);
 		return NULL;
 	}
@@ -142,6 +185,8 @@ HANDLE JpegToDib(LPVOID lpJpegData, DWORD dwLenData, INT nTraceLevel)
 	LPBITMAPV5HEADER lpBIV5 = (LPBITMAPV5HEADER)GlobalLock(hDib);
 	if (lpBIV5 == NULL)
 	{
+		pjInfo->err->msg_code = JWRN_GLOBAL_LOCK;
+		my_emit_message((j_common_ptr)pjInfo, -1);
 		cleanup_jpeg_to_dib(&JpegDecompress, hDib);
 		return NULL;
 	}
@@ -171,7 +216,7 @@ HANDLE JpegToDib(LPVOID lpJpegData, DWORD dwLenData, INT nTraceLevel)
 			}
 		}
 		else
-		{ // Palette image
+		{ // Palette image (in case quantize_colors == TRUE)
 			for (UINT u = 0; u < uNumColors; u++)
 			{  // Copy color table
 				lprgbqColors[u].rgbRed   = pjInfo->colormap[0][u];
@@ -183,7 +228,7 @@ HANDLE JpegToDib(LPVOID lpJpegData, DWORD dwLenData, INT nTraceLevel)
 	}
 
 	// Embed an existing ICC profile into the DIB
-	if (bHasProfile)
+	if (bHasProfile && JpegDecompress.lpProfileData != NULL)
 	{
 		lpBIV5->bV5CSType = PROFILE_EMBEDDED;
 		lpBIV5->bV5Intent = LCS_GM_IMAGES;
@@ -213,7 +258,7 @@ HANDLE JpegToDib(LPVOID lpJpegData, DWORD dwLenData, INT nTraceLevel)
 		// Decompress one line
 		jpeg_read_scanlines(pjInfo, lpScanlines, 1);
 
-		if (pjInfo->out_color_space == JCS_CMYK)
+		if (pjInfo->out_color_space == JCS_CMYK && pjInfo->output_components == 4)
 		{ // Convert from CMYK to RGB
 			for (UINT u = 0; u < (pjInfo->output_width * 4); u += 4)
 			{
@@ -278,6 +323,9 @@ void set_error_manager(j_common_ptr pjInfo, j_error_mgr* pjError)
 	pjError->error_exit = my_error_exit;
 	pjError->output_message = my_output_message;
 	pjError->emit_message = my_emit_message;
+	pjError->addon_message_table = my_message_table;
+	pjError->first_addon_message = JMSG_FIRSTADDONCODE;
+	pjError->last_addon_message = JMSG_LASTADDONCODE;
 
 	// Set trace level
 	pjError->trace_level = ((LPJPEG_DECOMPRESS)pjInfo)->nTraceLevel;
