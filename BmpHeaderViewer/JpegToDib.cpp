@@ -323,6 +323,8 @@ void set_error_manager(j_common_ptr pjInfo, j_error_mgr* pjError)
 	pjError->error_exit = my_error_exit;
 	pjError->output_message = my_output_message;
 	pjError->emit_message = my_emit_message;
+
+	// Add application-specific error messages
 	pjError->addon_message_table = my_message_table;
 	pjError->first_addon_message = JMSG_FIRSTADDONCODE;
 	pjError->last_addon_message = JMSG_LASTADDONCODE;
