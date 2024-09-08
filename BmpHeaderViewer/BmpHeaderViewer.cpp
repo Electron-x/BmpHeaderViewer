@@ -599,65 +599,7 @@ INT_PTR CALLBACK HeaderViewerDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPA
 
 				case IDC_PASTE:
 				{
-					if (IsClipboardFormatAvailable(CF_HDROP))
-					{ // Open up to 100 files of a list pasted from the clipboard
-						if (!OpenClipboard(hDlg))
-							return FALSE;
-
-						HDROP hDrop = (HDROP)GetClipboardData(CF_HDROP);
-						if (hDrop == NULL)
-						{
-							CloseClipboard();
-							return FALSE;
-						}
-
-						LPVOID lpDropFiles = GlobalLock(hDrop);
-						if (lpDropFiles == NULL)
-						{
-							CloseClipboard();
-							return FALSE;
-						}
-
-						UINT nFiles = DragQueryFile(hDrop, (UINT)-1, NULL, 0);
-						if (nFiles > 100)
-							nFiles = 100;
-
-						if (nFiles == 0)
-						{
-							GlobalUnlock(hDrop);
-							CloseClipboard();
-							return FALSE;
-						}
-
-						HCURSOR hOldCursor = SetCursor(LoadCursor(NULL, IDC_WAIT));
-						HWND hwndEdit = GetDlgItem(hDlg, IDC_OUTPUT);
-
-						ClearOutputWindow(hwndEdit);
-
-						BOOL bSuccess = FALSE;
-						for (UINT iFile = 0; iFile < nFiles; iFile++)
-						{
-							DragQueryFile(hDrop, iFile, s_szFileName, _countof(s_szFileName));
-
-							if (iFile > 0)
-								Edit_ReplaceSel(hwndEdit, TEXT("\r\n"));
-
-							bSuccess = ParseFile(hDlg, s_szFileName) || bSuccess;
-						}
-
-						GlobalUnlock(hDrop);
-						CloseClipboard();
-
-						if (bSuccess && GetFocus() != hwndEdit)
-						{
-							SetFocus(hwndEdit);
-							int nLen = Edit_GetTextLength(hwndEdit);
-							Edit_SetSel(hwndEdit, nLen, nLen);
-						}
-
-						SetCursor(hOldCursor);
-					}
-					else if (IsClipboardFormatAvailable(CF_DIB) || IsClipboardFormatAvailable(CF_DIBV5))
+					if (IsClipboardFormatAvailable(CF_DIB) || IsClipboardFormatAvailable(CF_DIBV5))
 					{ // Paste a DIBv3 or a DIBv5 from the clipboard
 						if (!OpenClipboard(hDlg))
 							return FALSE;
@@ -731,6 +673,64 @@ INT_PTR CALLBACK HeaderViewerDlgProc(HWND hDlg, UINT message, WPARAM wParam, LPA
 
 						OutputText(hwndEdit, g_szSepThick);
 						EnableButton(hDlg, IDC_THUMB_COPY, IDC_OPEN, bSuccess);
+
+						if (bSuccess && GetFocus() != hwndEdit)
+						{
+							SetFocus(hwndEdit);
+							int nLen = Edit_GetTextLength(hwndEdit);
+							Edit_SetSel(hwndEdit, nLen, nLen);
+						}
+
+						SetCursor(hOldCursor);
+					}
+					else if (IsClipboardFormatAvailable(CF_HDROP))
+					{ // Open up to 100 files of a list pasted from the clipboard
+						if (!OpenClipboard(hDlg))
+							return FALSE;
+
+						HDROP hDrop = (HDROP)GetClipboardData(CF_HDROP);
+						if (hDrop == NULL)
+						{
+							CloseClipboard();
+							return FALSE;
+						}
+
+						LPVOID lpDropFiles = GlobalLock(hDrop);
+						if (lpDropFiles == NULL)
+						{
+							CloseClipboard();
+							return FALSE;
+						}
+
+						UINT nFiles = DragQueryFile(hDrop, (UINT)-1, NULL, 0);
+						if (nFiles > 100)
+							nFiles = 100;
+
+						if (nFiles == 0)
+						{
+							GlobalUnlock(hDrop);
+							CloseClipboard();
+							return FALSE;
+						}
+
+						HCURSOR hOldCursor = SetCursor(LoadCursor(NULL, IDC_WAIT));
+						HWND hwndEdit = GetDlgItem(hDlg, IDC_OUTPUT);
+
+						ClearOutputWindow(hwndEdit);
+
+						BOOL bSuccess = FALSE;
+						for (UINT iFile = 0; iFile < nFiles; iFile++)
+						{
+							DragQueryFile(hDrop, iFile, s_szFileName, _countof(s_szFileName));
+
+							if (iFile > 0)
+								Edit_ReplaceSel(hwndEdit, TEXT("\r\n"));
+
+							bSuccess = ParseFile(hDlg, s_szFileName) || bSuccess;
+						}
+
+						GlobalUnlock(hDrop);
+						CloseClipboard();
 
 						if (bSuccess && GetFocus() != hwndEdit)
 						{
