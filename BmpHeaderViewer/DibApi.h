@@ -166,7 +166,7 @@ BOOL SaveBitmap(LPCTSTR lpszFileName, HANDLE hDib);
 // Saves the embedded profile of a DIB in an ICC color profile file
 BOOL SaveProfile(LPCTSTR lpszFileName, HANDLE hDib);
 
-// Creates a 32-bpp DIB with pre-multiplied alpha from a translucent 16/32-bpp DIB
+// Creates a 32-bpp DIB with pre-multiplied alpha from a translucent 16/32/64-bpp DIB
 HBITMAP CreatePremultipliedBitmap(HANDLE hDib);
 
 // Frees the memory allocated for a DIB section using DeleteObject
@@ -199,7 +199,7 @@ HANDLE CreateClipboardDib(HANDLE hDib, UINT* puFormat = NULL);
 HPALETTE CreateDibPalette(HANDLE hDib);
 
 // Gets the width and height of a DIB
-BOOL GetDIBDimensions(LPCSTR lpbi, LPLONG lplWidth, LPLONG lplHeight, BOOL bAbsolute = FALSE);
+BOOL GetDibDimensions(LPCSTR lpbi, LPLONG lplWidth, LPLONG lplHeight, BOOL bAbsolute = FALSE);
 
 // Calculates the number of colors in the DIBs color table
 UINT DibNumColors(LPCSTR lpbi);
@@ -223,6 +223,9 @@ LPBYTE FindDibPalette(LPCSTR lpbi);
 
 // Returns a pointer to the pixel bits of a packed DIB
 LPBYTE FindDibBits(LPCSTR lpbi);
+
+// Checks whether the DIB can store transparency information
+BOOL DibHasAlphaChannel(LPCSTR lpbi);
 
 // Checks if the DIBv5 has an embedded ICC profile
 BOOL DibHasEmbeddedProfile(LPCSTR lpbi);
