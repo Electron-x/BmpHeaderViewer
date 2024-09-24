@@ -21,7 +21,7 @@
 ////////////////////////////////////////////////////////////////////////////////////////////////
 // Global Variables
 
-#define VERSION TEXT("1.5")
+#define VERSION TEXT("1.6")
 #if defined(_WIN64)
 #define PLATFORM TEXT("64-bit")
 #else
@@ -1536,7 +1536,7 @@ BOOL PrintThumbnail(HWND hDlg, LPCTSTR lpszDocName)
 		LPCSTR lpbi = (LPCSTR)GlobalLock(hDib);
 		if (lpbi != NULL)
 		{
-			GetDIBDimensions(lpbi, &lWidth, &lHeight, TRUE);
+			GetDibDimensions(lpbi, &lWidth, &lHeight, TRUE);
 			GlobalUnlock(hDib);
 		}
 	}
@@ -1649,7 +1649,7 @@ BOOL OnDrawItem(const LPDRAWITEMSTRUCT lpDrawItem)
 			LONG lSrcWidth  = 0;
 			LONG lSrcHeight = 0;
 
-			GetDIBDimensions((LPCSTR)lpbi, &lSrcWidth, &lSrcHeight, TRUE);
+			GetDibDimensions((LPCSTR)lpbi, &lSrcWidth, &lSrcHeight, TRUE);
 
 			if (lpDrawItem->itemState & ODS_SELECTED)
 			{
