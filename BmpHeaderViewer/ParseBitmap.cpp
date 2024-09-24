@@ -221,15 +221,14 @@ BOOL ParseDIBitmap(HWND hDlg, HANDLE hDib, DWORD dwOffBits)
 		// or a BITMAPINFOHEADER2 DIB with 15 < cbFix < 64
 		GlobalUnlock(hDib);
 
-		if (dwDibHeaderSize < 16)
+		if (dwDibHeaderSize >= 16 && dwDibHeaderSize <= 124)
 		{
-			OutputTextFromID(hwndEdit, IDS_CORRUPTED);
+			OutputTextFromID(hwndEdit, IDS_HEADERSIZE);
+			SetThumbnailText(hwndThumb, IDS_UNSUPPORTED);
 			return FALSE;
 		}
 
-		OutputTextFromID(hwndEdit, IDS_HEADERSIZE);
-		SetThumbnailText(hwndThumb, IDS_UNSUPPORTED);
-
+		OutputTextFromID(hwndEdit, IDS_CORRUPTED);
 		return FALSE;
 	}
 
@@ -265,9 +264,16 @@ BOOL ParseDIBitmap(HWND hDlg, HANDLE hDib, DWORD dwOffBits)
 		// Use the QUERYDIBSUPPORT escape function to determine whether the display
 		// driver can draw this DIB. The Escape doesn't support core DIBs.
 		bIsDibDisplayable = IsDibSupported(lpbi);
+
+		// 64-bit DIBs are not supported. However, they could be displayed with
+		// the AlphaBlend function after the required conversion to a 32-bit DIB.
+		if (lpbih->bV5BitCount == 64)
+			bIsDibDisplayable = TRUE;
+
 		// Perform some additional sanity checks
 		if (lpbih->bV5Width < 0)
 			lpbih->bV5Width = -lpbih->bV5Width;
+
 		// We don't fix biPlanes to 1 because GDI still takes this value into account
 		UINT64 ullBitsSize = WIDTHBYTES((UINT64)lpbih->bV5Width * lpbih->bV5Planes * lpbih->bV5BitCount) * abs(lpbih->bV5Height);
 		// biBitCount is 0 for passthrough bitmaps (BI_JPEG, BI_PNG)
@@ -287,10 +293,10 @@ BOOL ParseDIBitmap(HWND hDlg, HANDLE hDib, DWORD dwOffBits)
 			// Not supported by GDI, but may be rendered by VfW DrawDibDraw
 			bIsDibDisplayable = TRUE;
 			OutputTextFmt(hwndEdit, TEXT("%hc%hc%hc%hc"),
-				(char)(dwCompression & 0xff),
-				(char)((dwCompression >> 8) & 0xff),
-				(char)((dwCompression >> 16) & 0xff),
-				(char)((dwCompression >> 24) & 0xff));
+				(char)dwCompression,
+				(char)(dwCompression >> 8),
+				(char)(dwCompression >> 16),
+				(char)(dwCompression >> 24));
 		}
 		else if (dwDibHeaderSize == sizeof(BITMAPINFOHEADER2))
 		{ // OS/2 2.0 bitmap
@@ -340,6 +346,7 @@ BOOL ParseDIBitmap(HWND hDlg, HANDLE hDib, DWORD dwOffBits)
 					OutputText(hwndEdit, TEXT("PNG"));
 					break;
 				case BI_ALPHABITFIELDS:
+					bIsDibDisplayable = TRUE;
 					OutputText(hwndEdit, TEXT("ALPHABITFIELDS"));
 					break;
 				case BI_FOURCC:
@@ -504,10 +511,10 @@ BOOL ParseDIBitmap(HWND hDlg, HANDLE hDib, DWORD dwOffBits)
 			isprint((dwCSType >> 24) & 0xff))
 		{
 			OutputTextFmt(hwndEdit, TEXT("%hc%hc%hc%hc"),
-				(char)((dwCSType >> 24) & 0xff),
-				(char)((dwCSType >> 16) & 0xff),
-				(char)((dwCSType >>  8) & 0xff),
-				(char)(dwCSType & 0xff));
+				(char)(dwCSType >> 24),
+				(char)(dwCSType >> 16),
+				(char)(dwCSType >>  8),
+				(char)dwCSType);
 		}
 		else
 		{
@@ -1102,20 +1109,20 @@ void PrintProfileSignature(HWND hwndEdit, LPCTSTR lpszName, DWORD dwSignature, B
 			isprint((dwSignature >> 24) & 0xff))
 		{ // Sequence of four characters
 			OutputTextFmt(hwndEdit, TEXT("%hc%hc%hc%hc"),
-				(char)(dwSignature & 0xff),
-				(char)((dwSignature >>  8) & 0xff),
-				(char)((dwSignature >> 16) & 0xff),
-				(char)((dwSignature >> 24) & 0xff));
+				(char)dwSignature,
+				(char)(dwSignature >>  8),
+				(char)(dwSignature >> 16),
+				(char)(dwSignature >> 24));
 		}
 		else
 			if (isprint(dwSignature & 0xff) &&
 				isprint((dwSignature >> 8) & 0xff))
 			{ // Extended colour space signature
 				OutputTextFmt(hwndEdit, TEXT("%hc%hc%02X%02X"),
-					(char)(dwSignature & 0xff),
-					(char)((dwSignature >>  8) & 0xff),
-					(BYTE)((dwSignature >> 16) & 0xff),
-					(BYTE)((dwSignature >> 24) & 0xff));
+					(char)dwSignature,
+					(char)(dwSignature >>  8),
+					(BYTE)(dwSignature >> 16),
+					(BYTE)(dwSignature >> 24));
 			}
 			else
 				OutputTextFmt(hwndEdit, TEXT("%08X"), _byteswap_ulong(dwSignature));
