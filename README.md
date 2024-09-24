@@ -355,6 +355,10 @@ A BMP file can be opened in various ways:
 
 For performance reasons, color management is only activated if the bitmap contains color space data. Color management and transparency are mutually exclusive. You can use the context menu of the thumbnail to activate or deactivate color matching for this specific image.
 
+16/32/64-bpp bitmaps with semi-transparent pixels are displayed using alpha blending. A BI_RGB copy with 32 bpp is created for this purpose. This allows some 64-bpp bitmaps and BI_ALPHABITFIELDS bitmaps to be rendered, although they are not supported by the Windows GDI.
+
+A DIB is displayed stretched or compressed in the thumbnail window. If a bitmap cannot be loaded because it is corrupt, only the default image is displayed. If the display driver reports that it cannot display a specific bitmap, the text "Unsupported format" is displayed on the default image. Some unsupported formats are still sent to the output device (e.g. passthrough images or video-compressed bitmaps). If an error occurs during the output of a DIB, a crosshatch is drawn.
+
 A loaded bitmap can also be printed. This allows you to check how a specific DIB is displayed on a different output device.
 
 The program can also open JPEG files. This gives you more options for experimenting with color profiles.
@@ -373,7 +377,7 @@ The tool displays the header and tag table of an embedded color profile. Simple 
 
 Standard DIBs and DIBs with DIB format extensions are rendered directly using Windows GDI. No format conversion takes place. For custom formats, the DrawDib API from Video for Windows is used. No other codec-based frameworks such as Windows Imaging Component are used.
 
-Image color management is performed on-the-fly using [Device Context-based ICM](https://learn.microsoft.com/en-us/windows/win32/api/wingdi/nf-wingdi-seticmmode) (ICM 1.0). As ICM outside DC (ICM 2.0) is not supported, DIBs with transparent pixels are displayed without color matching. For the same reason, DIBs with linked ICC profiles are not supported. In the Color Management dialog box, profile selection, intent selection and proofing are not supported.
+Image color management is performed on-the-fly using [device context-based ICM](https://learn.microsoft.com/en-us/windows/win32/api/wingdi/nf-wingdi-seticmmode) (ICM 1.0). As ICM outside DC (ICM 2.0) is not supported, DIBs with transparent pixels are displayed without color matching. For the same reason, DIBs with linked ICC profiles are not supported. In the Color Management dialog box, profile selection, intent selection and proofing are not supported.
 
 The dark mode of Windows 10 1809+ is only rudimentarily supported (limited to the main window).
 
