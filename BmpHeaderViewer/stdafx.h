@@ -51,6 +51,7 @@
 // C RunTime Header Files
 #include <tchar.h>
 #include <setjmp.h>
+#include <math.h>
 
 // TODO: reference additional headers your program requires here
 #include "BmpHeaderViewer.h"
